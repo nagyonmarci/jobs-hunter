@@ -1,5 +1,11 @@
 # Job Search Automation with Directus
 
+[![CI](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml)
+[![OSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nagyonmarci/jobs-hunter/badge)](https://securityscorecards.dev/viewer/?uri=github.com/nagyonmarci/jobs-hunter)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
+
 This is a small, dependency-free Node.js starter for tracking DevOps/SRE/Platform job leads in Directus.
 
 It does not scrape LinkedIn behind login. Instead it:
@@ -235,3 +241,61 @@ Statuses to use:
 ## Why this shape
 
 LinkedIn automation that logs in, scrapes pages, or submits applications is brittle and can risk the account. This setup keeps the reliable part automated: search generation, structured tracking, dedupe, and application pipeline state in Directus.
+
+## Development
+
+Install dependencies and the local pre-commit hooks:
+
+```bash
+npm install
+```
+
+Common tasks:
+
+```bash
+npm run lint           # ESLint
+npm run format         # Prettier (write)
+npm run format:check   # Prettier (verify)
+npm test               # Vitest (watch)
+npm run test:run       # Vitest (single run)
+npm run test:coverage  # Vitest + v8 coverage
+```
+
+`lint-staged` runs ESLint and Prettier on staged files via the
+`pre-commit` hook; the `pre-push` hook runs the test suite.
+
+### Docker image
+
+A minimal multi-stage image is published from tagged releases to
+`ghcr.io/nagyonmarci/jobs-hunter`. To build locally:
+
+```bash
+docker build -t jobs-hunter:dev .
+docker run --rm jobs-hunter:dev scripts/generate-linkedin-searches.mjs --dry-run
+```
+
+## Continuous integration
+
+Every push and pull request runs:
+
+- ESLint, Prettier check, and the LinkedIn search dry-run on Node 20 and 22
+- Vitest with v8 coverage (artifact uploaded for Node 20)
+- gitleaks secret scanning
+- CodeQL static analysis (JavaScript)
+- A Docker image build smoke test
+
+OSSF Scorecard runs weekly and on every push to `main`. Dependabot opens
+weekly updates for npm packages, GitHub Actions, and the Dockerfile base
+image.
+
+## Releases
+
+Releases are cut by pushing a `vMAJOR.MINOR.PATCH` tag. The
+[`release` workflow](.github/workflows/release.yml) builds and publishes
+a multi-tag container image to GHCR and creates a GitHub release with
+auto-generated notes.
+
+## Security
+
+Please follow [SECURITY.md](.github/SECURITY.md) to report
+vulnerabilities privately rather than opening a public issue.

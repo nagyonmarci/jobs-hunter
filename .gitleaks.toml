@@ -1,0 +1,15 @@
+title = "jobs-hunter gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Project-level allowlist"
+paths = [
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)\.gitleaks\.toml$''',
+  '''(^|/)\.env\.example$''',
+  '''(^|/)tests/''',
+  '''(^|/)public/''',
+  '''(^|/)data/.*\.sample\.json$'''
+]

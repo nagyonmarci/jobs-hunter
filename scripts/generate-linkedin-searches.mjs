@@ -1,30 +1,10 @@
 import fs from "node:fs/promises";
 import { createDirectusClient } from "./directus-client.mjs";
+import { buildLinkedInSearchUrl } from "./linkedin-url.mjs";
 
 const config = JSON.parse(await fs.readFile("config/searches.json", "utf8"));
 const dryRun = process.argv.includes("--dry-run");
 const directus = dryRun ? null : await createDirectusClient();
-
-const experienceMap = {
-  internship: "1",
-  entry: "2",
-  associate: "3",
-  "mid-senior": "4"
-};
-
-function linkedInSearchUrl({ keyword, location, workplace }) {
-  const excludeKeywords = config.filters.excludeKeywords || [];
-  const searchQuery = [keyword, ...excludeKeywords.map((term) => `NOT ${term}`)].join(" ");
-  const params = new URLSearchParams({
-    keywords: searchQuery,
-    location,
-    f_WT: workplace === "remote" ? "2" : "3",
-    f_TPR: config.filters.postedWithin,
-    f_E: config.filters.experienceLevels.map((level) => experienceMap[level]).filter(Boolean).join(",")
-  });
-
-  return `${config.source.linkedin.baseUrl}?${params.toString()}`;
-}
 
 const rows = [];
 
@@ -36,7 +16,7 @@ for (const keyword of config.filters.keywords) {
       query,
       location,
       workplace: "hybrid",
-      url: linkedInSearchUrl({ keyword, location, workplace: "hybrid" }),
+      url: buildLinkedInSearchUrl({ keyword, location, workplace: "hybrid" }, config),
       generated_at: new Date().toISOString()
     });
   }
@@ -47,7 +27,7 @@ for (const keyword of config.filters.keywords) {
       query,
       location,
       workplace: "remote",
-      url: linkedInSearchUrl({ keyword, location, workplace: "remote" }),
+      url: buildLinkedInSearchUrl({ keyword, location, workplace: "remote" }, config),
       generated_at: new Date().toISOString()
     });
   }
