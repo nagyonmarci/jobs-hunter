@@ -94,5 +94,11 @@ services:
 
 volumes:
   postgres_data:
+    name: seg-ts-a-linkedin-com-on_postgres_data
+    external: true
   directus_uploads:
+    name: seg-ts-a-linkedin-com-on_directus_uploads
+    external: true
   directus_extensions:
+    name: seg-ts-a-linkedin-com-on_directus_extensions
+    external: true
