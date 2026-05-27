@@ -673,7 +673,7 @@ async function importLinkedinJobs() {
   const runLimit = Number($("importRunLimit").value) || 25;
   const maxJobsPerRun = Number($("importJobsPerRun").value) || 25;
 
-  setImportStatus("Importing LinkedIn jobs...", "");
+  setImportStatus("Importing jobs...", "");
   button.disabled = true;
   try {
     const response = await fetch(`${importerUrl}/import-linkedin-jobs`, {
