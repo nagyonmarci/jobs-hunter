@@ -82,8 +82,12 @@ const experienceMap = {
 
 const $ = (id) => document.getElementById(id);
 
+const tabKey = "jobhunter_active_tab";
+const viewKey = "jobhunter_lead_view";
+
 let generatedRows = [];
 let leadRows = [];
+let currentView = localStorage.getItem(viewKey) || "list";
 
 function showToast(message) {
   const toast = $("toast");
@@ -448,6 +452,78 @@ function appendLeadFilters(params) {
   if (scoreMax !== "") params.set("filter[score][_lte]", String(Number(scoreMax)));
 }
 
+function initTabs() {
+  const savedTab = localStorage.getItem(tabKey) || "setup";
+  activateTab(savedTab);
+  if (savedTab === "leads") loadLeads().catch(() => {});
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      activateTab(tab);
+      localStorage.setItem(tabKey, tab);
+      if (tab === "leads" && leadRows.length === 0) {
+        loadLeads().catch((error) => showToast(error.message));
+      }
+    });
+  });
+}
+
+function activateTab(tabName) {
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll(".tab-content").forEach((el) => {
+    el.classList.toggle("hidden", el.id !== `tab-${tabName}`);
+  });
+}
+
+function initViewToggle() {
+  applyView(currentView);
+  document.querySelectorAll(".view-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      currentView = btn.dataset.view;
+      localStorage.setItem(viewKey, currentView);
+      applyView(currentView);
+      renderLeads();
+    });
+  });
+}
+
+function applyView(view) {
+  document.querySelectorAll(".view-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.view === view);
+  });
+  $("leadRows").classList.toggle("grid-view", view === "grid");
+}
+
+function renderCompactCard(lead) {
+  const scoreClass = scoreClassName(lead.score);
+  const readClass = lead.is_read ? "read" : "unread";
+  return `
+    <article class="lead-card compact ${readClass}" data-id="${escapeAttribute(lead.id)}">
+      <div class="lead-title-row">
+        <h3>${escapeHtml(lead.title || "Untitled role")}</h3>
+        <span class="score-pill ${scoreClass}">${escapeHtml(String(lead.score ?? "-"))}</span>
+      </div>
+      <p class="lead-meta">
+        ${escapeHtml([lead.company, lead.location].filter(Boolean).join(" · ") || "—")}
+      </p>
+      <div class="tag-row">
+        ${lead.workplace ? `<span>${escapeHtml(lead.workplace)}</span>` : ""}
+        ${lead.seniority ? `<span>${escapeHtml(lead.seniority)}</span>` : ""}
+        ${lead.language ? `<span>${escapeHtml(lead.language)}</span>` : ""}
+        <span class="read-toggle" data-action="toggle-read" title="Toggle read/unread">${lead.is_read ? "read" : "unread"}</span>
+      </div>
+      <div class="compact-actions">
+        <select data-action="status" aria-label="Status for ${escapeAttribute(lead.title || "lead")}">
+          ${statusOptions(lead.status)}
+        </select>
+        ${lead.url ? `<a class="button-link" href="${escapeAttribute(lead.url)}" target="_blank" rel="noreferrer">Open</a>` : ""}
+      </div>
+    </article>
+  `;
+}
+
 function renderLeads() {
   const query = normalizeText($("leadSearch").value);
   const filtered = query
@@ -464,8 +540,12 @@ function renderLeads() {
 
   const unreadCount = filtered.filter((lead) => !lead.is_read).length;
   $("leadCount").textContent = `${filtered.length} shown. ${unreadCount} unread.`;
+
+  const badge = $("leadsTabCount");
+  if (badge) badge.textContent = filtered.length ? String(filtered.length) : "";
+
   $("leadRows").innerHTML = filtered.length
-    ? filtered.map(renderLeadCard).join("")
+    ? filtered.map(currentView === "grid" ? renderCompactCard : renderLeadCard).join("")
     : `<div class="empty-state">No leads match the current filters.</div>`;
 }
 
@@ -752,4 +832,5 @@ $("leadForm").addEventListener("submit", (event) => saveLead(event).catch((error
 
 applySettings(loadSettings());
 generateSearchRows();
-loadLeads().catch(() => {});
+initTabs();
+initViewToggle();

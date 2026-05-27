@@ -15,331 +15,349 @@
       <div class="status" id="connectionStatus">Loading...</div>
     </header>
 
-    <main class="layout">
-      <section class="panel settings-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Connection</h2>
-            <p>Stored locally in this browser.</p>
+    <nav class="tab-bar">
+      <button type="button" class="tab-btn active" data-tab="setup">Setup</button>
+      <button type="button" class="tab-btn" data-tab="leads">Job Leads <span class="leads-count" id="leadsTabCount"></span></button>
+    </nav>
+
+    <div class="tab-content" id="tab-setup">
+      <main class="layout">
+        <section class="panel settings-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Connection</h2>
+              <p>Stored locally in this browser.</p>
+            </div>
+            <button type="button" class="secondary" id="testConnection">Test</button>
           </div>
-          <button type="button" class="secondary" id="testConnection">Test</button>
-        </div>
 
-        <label>
-          Directus URL
-          <input id="directusUrl" type="url" placeholder="http://localhost:8055">
-        </label>
-
-        <label>
-          Static token
-          <input id="directusToken" type="password" placeholder="Directus static token">
-        </label>
-
-        <div class="login-box">
-          <p>Or login with Directus admin credentials.</p>
           <label>
-            Email
-            <input id="directusEmail" type="email" placeholder="admin@example.com">
-          </label>
-          <label>
-            Password
-            <input id="directusPassword" type="password" placeholder="Directus password">
-          </label>
-          <label class="check">
-            <input type="checkbox" id="rememberLogin">
-            Remember login on this browser
-          </label>
-        </div>
-
-        <div class="button-row">
-          <button type="button" id="saveSettings">Save settings</button>
-          <button type="button" class="secondary" id="loginDirectus">Login</button>
-          <button type="button" class="secondary" id="clearSettings">Clear</button>
-        </div>
-      </section>
-
-      <section class="panel config-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Search Parameters</h2>
-            <p>One value per line.</p>
-          </div>
-          <button type="button" class="secondary" id="resetDefaults">Defaults</button>
-        </div>
-
-        <div class="field-grid">
-          <label>
-            Keywords
-            <textarea id="keywords" rows="8"></textarea>
+            Directus URL
+            <input id="directusUrl" type="url" placeholder="http://localhost:8055">
           </label>
 
           <label>
-            Exclude terms
-            <textarea id="excludeKeywords" rows="8"></textarea>
+            Static token
+            <input id="directusToken" type="password" placeholder="Directus static token">
           </label>
 
-          <label>
-            Positive tech
-            <textarea id="positiveTech" rows="8"></textarea>
-          </label>
-
-          <label>
-            Negative signals
-            <textarea id="negativeSignals" rows="8"></textarea>
-          </label>
-
-          <label>
-            Hybrid locations
-            <textarea id="hybridLocations" rows="8"></textarea>
-          </label>
-
-          <label>
-            Remote locations
-            <textarea id="remoteLocations" rows="4"></textarea>
-          </label>
-
-          <div class="stack">
-            <fieldset>
-              <legend>Seniority</legend>
-              <label class="check"><input type="checkbox" name="experience" value="internship"> Internship</label>
-              <label class="check"><input type="checkbox" name="experience" value="entry"> Entry / junior</label>
-              <label class="check"><input type="checkbox" name="experience" value="associate"> Associate / medior</label>
-              <label class="check"><input type="checkbox" name="experience" value="mid-senior"> Mid-senior</label>
-            </fieldset>
-
+          <div class="login-box">
+            <p>Or login with Directus admin credentials.</p>
             <label>
-              Minimum score
-              <input id="minimumScore" type="number" min="0" max="100" value="45">
+              Email
+              <input id="directusEmail" type="email" placeholder="admin@example.com">
             </label>
-
-            <fieldset>
-              <legend>Allowed languages</legend>
-              <label class="check"><input type="checkbox" name="allowedLanguage" value="english"> English</label>
-              <label class="check"><input type="checkbox" name="allowedLanguage" value="hungarian"> Hungarian</label>
-              <label class="check"><input type="checkbox" name="allowedLanguage" value="mixed"> Hungarian / English</label>
-              <label class="check"><input type="checkbox" name="allowedLanguage" value="unknown"> Unknown</label>
-            </fieldset>
-
-            <fieldset>
-              <legend>Blocked languages</legend>
-              <label class="check"><input type="checkbox" name="blockedLanguage" value="other"> Other detected language</label>
-              <label class="check"><input type="checkbox" name="blockedLanguage" value="unknown"> Unknown</label>
-            </fieldset>
-
             <label>
-              Posted within hours
-              <input id="postedWithinHours" type="number" min="1" max="720" value="168">
+              Password
+              <input id="directusPassword" type="password" placeholder="Directus password">
+            </label>
+            <label class="check">
+              <input type="checkbox" id="rememberLogin">
+              Remember login on this browser
             </label>
           </div>
-        </div>
 
-        <div class="button-row">
-          <button type="button" id="generateSearches">Generate URLs</button>
-          <button type="button" class="secondary" id="saveRuns">Save runs to Directus</button>
-          <button type="button" class="secondary" id="openAll">Open all</button>
-        </div>
-      </section>
-
-      <section class="panel results-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Generated Searches</h2>
-            <p id="generatedCount">No URLs generated yet.</p>
+          <div class="button-row">
+            <button type="button" id="saveSettings">Save settings</button>
+            <button type="button" class="secondary" id="loginDirectus">Login</button>
+            <button type="button" class="secondary" id="clearSettings">Clear</button>
           </div>
-          <button type="button" class="secondary" id="copyUrls">Copy URLs</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Workplace</th>
-                <th>Location</th>
-                <th>Query</th>
-                <th>URL</th>
-              </tr>
-            </thead>
-            <tbody id="generatedRows"></tbody>
-          </table>
-        </div>
-      </section>
+        </section>
 
-      <section class="panel import-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Import LinkedIn Jobs</h2>
-            <p>Creates job leads from saved search runs.</p>
+        <section class="panel config-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Search Parameters</h2>
+              <p>One value per line.</p>
+            </div>
+            <button type="button" class="secondary" id="resetDefaults">Defaults</button>
           </div>
-          <button type="button" class="secondary" id="importLinkedinJobs">Import jobs</button>
-        </div>
 
-        <div class="compact-fields">
-          <fieldset>
-            <legend>Sources</legend>
-            <label class="check"><input type="checkbox" name="importSource" value="linkedin" checked> LinkedIn</label>
-            <label class="check"><input type="checkbox" name="importSource" value="nofluffjobs" checked> No Fluff Jobs</label>
-            <label class="check"><input type="checkbox" name="importSource" value="justjoinit" checked> Just Join IT</label>
-          </fieldset>
-          <label>
-            Runs to process
-            <input id="importRunLimit" type="number" min="1" max="200" value="25">
-          </label>
-          <label>
-            Jobs per run
-            <input id="importJobsPerRun" type="number" min="1" max="100" value="25">
-          </label>
-        </div>
-        <p class="form-status" id="importStatus">No import attempted yet.</p>
-      </section>
+          <div class="field-grid">
+            <label>
+              Keywords
+              <textarea id="keywords" rows="8"></textarea>
+            </label>
 
-      <section class="panel lead-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Add Job Lead</h2>
-            <p>Paste promising jobs here after reviewing LinkedIn.</p>
+            <label>
+              Exclude terms
+              <textarea id="excludeKeywords" rows="8"></textarea>
+            </label>
+
+            <label>
+              Positive tech
+              <textarea id="positiveTech" rows="8"></textarea>
+            </label>
+
+            <label>
+              Negative signals
+              <textarea id="negativeSignals" rows="8"></textarea>
+            </label>
+
+            <label>
+              Hybrid locations
+              <textarea id="hybridLocations" rows="8"></textarea>
+            </label>
+
+            <label>
+              Remote locations
+              <textarea id="remoteLocations" rows="4"></textarea>
+            </label>
+
+            <div class="stack">
+              <fieldset>
+                <legend>Seniority</legend>
+                <label class="check"><input type="checkbox" name="experience" value="internship"> Internship</label>
+                <label class="check"><input type="checkbox" name="experience" value="entry"> Entry / junior</label>
+                <label class="check"><input type="checkbox" name="experience" value="associate"> Associate / medior</label>
+                <label class="check"><input type="checkbox" name="experience" value="mid-senior"> Mid-senior</label>
+              </fieldset>
+
+              <label>
+                Minimum score
+                <input id="minimumScore" type="number" min="0" max="100" value="45">
+              </label>
+
+              <fieldset>
+                <legend>Allowed languages</legend>
+                <label class="check"><input type="checkbox" name="allowedLanguage" value="english"> English</label>
+                <label class="check"><input type="checkbox" name="allowedLanguage" value="hungarian"> Hungarian</label>
+                <label class="check"><input type="checkbox" name="allowedLanguage" value="mixed"> Hungarian / English</label>
+                <label class="check"><input type="checkbox" name="allowedLanguage" value="unknown"> Unknown</label>
+              </fieldset>
+
+              <fieldset>
+                <legend>Blocked languages</legend>
+                <label class="check"><input type="checkbox" name="blockedLanguage" value="other"> Other detected language</label>
+                <label class="check"><input type="checkbox" name="blockedLanguage" value="unknown"> Unknown</label>
+              </fieldset>
+
+              <label>
+                Posted within hours
+                <input id="postedWithinHours" type="number" min="1" max="720" value="168">
+              </label>
+            </div>
           </div>
-        </div>
 
-        <form id="leadForm" class="lead-form">
-          <input name="title" placeholder="Title" required>
-          <input name="company" placeholder="Company">
-          <input name="location" placeholder="Location">
-          <select name="workplace">
-            <option value="hybrid">Hybrid</option>
-            <option value="remote">Remote</option>
-            <option value="onsite">On-site</option>
-            <option value="unknown">Unknown</option>
-          </select>
-          <select name="seniority">
-            <option value="junior">Junior</option>
-            <option value="medior">Medior</option>
-            <option value="unknown">Unknown</option>
-          </select>
-          <select name="language">
-            <option value="english">English</option>
-            <option value="hungarian">Hungarian</option>
-            <option value="mixed">Hungarian / English</option>
-            <option value="unknown">Unknown</option>
-          </select>
-          <input name="url" placeholder="LinkedIn/job URL" required>
-          <input name="score" type="number" min="0" max="100" placeholder="Score">
-          <textarea name="notes" rows="3" placeholder="Notes"></textarea>
-          <button type="submit">Save lead</button>
-        </form>
-        <p class="form-status" id="leadFormStatus">No lead save attempted yet.</p>
-      </section>
-
-      <section class="panel leads-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Job Leads</h2>
-            <p id="leadCount">Not loaded.</p>
+          <div class="button-row">
+            <button type="button" id="generateSearches">Generate URLs</button>
+            <button type="button" class="secondary" id="saveRuns">Save runs to Directus</button>
+            <button type="button" class="secondary" id="openAll">Open all</button>
           </div>
-          <button type="button" class="secondary" id="loadLeads">Refresh leads</button>
-        </div>
+        </section>
 
-        <div class="lead-toolbar">
-          <label>
-            Search all
-            <input id="leadSearch" type="search" placeholder="Any text">
-          </label>
-          <label>
-            Title
-            <input id="leadTitleFilter" type="search" placeholder="DevOps, SRE">
-          </label>
-          <label>
-            Company
-            <input id="leadCompanyFilter" type="search" placeholder="Company">
-          </label>
-          <label>
-            Location
-            <input id="leadLocationFilter" type="search" placeholder="Budapest, Poland">
-          </label>
-          <label>
-            Notes
-            <input id="leadNotesFilter" type="search" placeholder="Kubernetes, on-call">
-          </label>
-          <label>
-            URL
-            <input id="leadUrlFilter" type="search" placeholder="linkedin.com/jobs">
-          </label>
-          <label>
-            Status
-            <select id="leadStatusFilter">
-              <option value="">All statuses</option>
-              <option value="new">New</option>
-              <option value="shortlisted">Shortlisted</option>
-              <option value="applied">Applied</option>
-              <option value="rejected">Rejected</option>
-              <option value="ignored">Ignored</option>
-            </select>
-          </label>
-          <label>
-            Read
-            <select id="leadReadFilter">
-              <option value="">All</option>
-              <option value="unread">Unread</option>
-              <option value="read">Read</option>
-            </select>
-          </label>
-          <label>
-            Workplace
-            <select id="leadWorkplaceFilter">
-              <option value="">All workplace</option>
-              <option value="remote">Remote</option>
+        <section class="panel results-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Generated Searches</h2>
+              <p id="generatedCount">No URLs generated yet.</p>
+            </div>
+            <button type="button" class="secondary" id="copyUrls">Copy URLs</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Workplace</th>
+                  <th>Location</th>
+                  <th>Query</th>
+                  <th>URL</th>
+                </tr>
+              </thead>
+              <tbody id="generatedRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel import-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Import LinkedIn Jobs</h2>
+              <p>Creates job leads from saved search runs.</p>
+            </div>
+            <button type="button" class="secondary" id="importLinkedinJobs">Import jobs</button>
+          </div>
+
+          <div class="compact-fields">
+            <fieldset>
+              <legend>Sources</legend>
+              <label class="check"><input type="checkbox" name="importSource" value="linkedin" checked> LinkedIn</label>
+              <label class="check"><input type="checkbox" name="importSource" value="nofluffjobs" checked> No Fluff Jobs</label>
+              <label class="check"><input type="checkbox" name="importSource" value="justjoinit" checked> Just Join IT</label>
+            </fieldset>
+            <label>
+              Runs to process
+              <input id="importRunLimit" type="number" min="1" max="200" value="25">
+            </label>
+            <label>
+              Jobs per run
+              <input id="importJobsPerRun" type="number" min="1" max="100" value="25">
+            </label>
+          </div>
+          <p class="form-status" id="importStatus">No import attempted yet.</p>
+        </section>
+
+        <section class="panel lead-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Add Job Lead</h2>
+              <p>Paste promising jobs here after reviewing LinkedIn.</p>
+            </div>
+          </div>
+
+          <form id="leadForm" class="lead-form">
+            <input name="title" placeholder="Title" required>
+            <input name="company" placeholder="Company">
+            <input name="location" placeholder="Location">
+            <select name="workplace">
               <option value="hybrid">Hybrid</option>
+              <option value="remote">Remote</option>
               <option value="onsite">On-site</option>
               <option value="unknown">Unknown</option>
             </select>
-          </label>
-          <label>
-            Seniority
-            <select id="leadSeniorityFilter">
-              <option value="">All seniority</option>
+            <select name="seniority">
               <option value="junior">Junior</option>
               <option value="medior">Medior</option>
-              <option value="senior">Senior</option>
               <option value="unknown">Unknown</option>
             </select>
-          </label>
-          <label>
-            Language
-            <select id="leadLanguageFilter">
-              <option value="">All languages</option>
+            <select name="language">
               <option value="english">English</option>
               <option value="hungarian">Hungarian</option>
               <option value="mixed">Hungarian / English</option>
               <option value="unknown">Unknown</option>
-              <option value="other">Other</option>
             </select>
-          </label>
-          <label>
-            Score min
-            <input id="leadScoreMinFilter" type="number" min="0" max="100" placeholder="0">
-          </label>
-          <label>
-            Score max
-            <input id="leadScoreMaxFilter" type="number" min="0" max="100" placeholder="100">
-          </label>
-          <label>
-            Sort
-            <select id="leadSort">
-              <option value="-score">Score high first</option>
-              <option value="score">Score low first</option>
-              <option value="-id">Newest first</option>
-              <option value="id">Oldest first</option>
-              <option value="title">Title A-Z</option>
-              <option value="company">Company A-Z</option>
-            </select>
-          </label>
-          <label>
-            Limit
-            <input id="leadLimit" type="number" min="10" max="500" value="100">
-          </label>
-        </div>
+            <input name="url" placeholder="LinkedIn/job URL" required>
+            <input name="score" type="number" min="0" max="100" placeholder="Score">
+            <textarea name="notes" rows="3" placeholder="Notes"></textarea>
+            <button type="submit">Save lead</button>
+          </form>
+          <p class="form-status" id="leadFormStatus">No lead save attempted yet.</p>
+        </section>
+      </main>
+    </div>
 
-        <div class="lead-list" id="leadRows"></div>
-      </section>
-    </main>
+    <div class="tab-content hidden" id="tab-leads">
+      <div class="leads-page">
+        <section class="panel leads-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Job Leads</h2>
+              <p id="leadCount">Not loaded.</p>
+            </div>
+            <button type="button" class="secondary" id="loadLeads">Refresh leads</button>
+          </div>
+
+          <div class="lead-toolbar">
+            <label>
+              Search all
+              <input id="leadSearch" type="search" placeholder="Any text">
+            </label>
+            <label>
+              Title
+              <input id="leadTitleFilter" type="search" placeholder="DevOps, SRE">
+            </label>
+            <label>
+              Company
+              <input id="leadCompanyFilter" type="search" placeholder="Company">
+            </label>
+            <label>
+              Location
+              <input id="leadLocationFilter" type="search" placeholder="Budapest, Poland">
+            </label>
+            <label>
+              Notes
+              <input id="leadNotesFilter" type="search" placeholder="Kubernetes, on-call">
+            </label>
+            <label>
+              URL
+              <input id="leadUrlFilter" type="search" placeholder="linkedin.com/jobs">
+            </label>
+            <label>
+              Status
+              <select id="leadStatusFilter">
+                <option value="">All statuses</option>
+                <option value="new">New</option>
+                <option value="shortlisted">Shortlisted</option>
+                <option value="applied">Applied</option>
+                <option value="rejected">Rejected</option>
+                <option value="ignored">Ignored</option>
+              </select>
+            </label>
+            <label>
+              Read
+              <select id="leadReadFilter">
+                <option value="">All</option>
+                <option value="unread">Unread</option>
+                <option value="read">Read</option>
+              </select>
+            </label>
+            <label>
+              Workplace
+              <select id="leadWorkplaceFilter">
+                <option value="">All workplace</option>
+                <option value="remote">Remote</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="onsite">On-site</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </label>
+            <label>
+              Seniority
+              <select id="leadSeniorityFilter">
+                <option value="">All seniority</option>
+                <option value="junior">Junior</option>
+                <option value="medior">Medior</option>
+                <option value="senior">Senior</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </label>
+            <label>
+              Language
+              <select id="leadLanguageFilter">
+                <option value="">All languages</option>
+                <option value="english">English</option>
+                <option value="hungarian">Hungarian</option>
+                <option value="mixed">Hungarian / English</option>
+                <option value="unknown">Unknown</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>
+              Score min
+              <input id="leadScoreMinFilter" type="number" min="0" max="100" placeholder="0">
+            </label>
+            <label>
+              Score max
+              <input id="leadScoreMaxFilter" type="number" min="0" max="100" placeholder="100">
+            </label>
+            <label>
+              Sort
+              <select id="leadSort">
+                <option value="-score">Score high first</option>
+                <option value="score">Score low first</option>
+                <option value="-id">Newest first</option>
+                <option value="id">Oldest first</option>
+                <option value="title">Title A-Z</option>
+                <option value="company">Company A-Z</option>
+              </select>
+            </label>
+            <label>
+              Limit
+              <input id="leadLimit" type="number" min="10" max="500" value="100">
+            </label>
+            <div class="view-toggle">
+              <span class="view-toggle-label">View</span>
+              <div class="view-toggle-btns">
+                <button type="button" class="view-btn" data-view="list" title="List view">☰</button>
+                <button type="button" class="view-btn" data-view="grid" title="Grid view">⊞</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="lead-list" id="leadRows"></div>
+        </section>
+      </div>
+    </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script type="module" src="./admin.js"></script>

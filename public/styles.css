@@ -100,8 +100,7 @@ h2 {
 
 .config-panel,
 .results-panel,
-.import-panel,
-.leads-panel {
+.import-panel {
   grid-column: 2;
 }
 
@@ -377,6 +376,167 @@ td a {
   background: var(--accent-dark);
 }
 
+/* ── Tab navigation ─────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfc;
+}
+
+.tab-btn {
+  padding: 12px 18px;
+  border: 1px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab-btn:hover {
+  color: var(--ink);
+  background: transparent;
+}
+
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: transparent;
+}
+
+.leads-count:empty {
+  display: none;
+}
+
+.leads-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.tab-content.hidden {
+  display: none;
+}
+
+/* ── Leads full-width page ───────────────────────────────────── */
+.leads-page {
+  padding: 24px 32px 40px;
+}
+
+/* ── View toggle ─────────────────────────────────────────────── */
+.view-toggle {
+  display: grid;
+  gap: 6px;
+}
+
+.view-toggle-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.view-toggle-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.view-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: #fff;
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.view-btn:hover {
+  color: var(--accent);
+  background: #edf7f5;
+}
+
+.view-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: #edf7f5;
+}
+
+/* ── Compact (grid) view ─────────────────────────────────────── */
+.lead-list.grid-view {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.lead-card.compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.lead-card.compact h3 {
+  font-size: 14px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lead-card.compact .lead-meta {
+  margin: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lead-card.compact .tag-row {
+  margin-top: 0;
+}
+
+.lead-card.compact .compact-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.lead-card.compact .compact-actions select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.lead-card.compact .compact-actions .button-link {
+  padding: 6px 10px;
+  min-height: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.read-toggle {
+  cursor: pointer;
+}
+
+.read-toggle:hover {
+  background: #d8e0e5;
+}
+
 .empty-state {
   padding: 18px;
   border: 1px dashed var(--line);
@@ -439,9 +599,16 @@ td a {
 
   .config-panel,
   .results-panel,
-  .import-panel,
-  .leads-panel {
+  .import-panel {
     grid-column: 1;
+  }
+
+  .tab-bar {
+    padding: 0 16px;
+  }
+
+  .leads-page {
+    padding: 16px;
   }
 
   .field-grid {
