@@ -1,0 +1,229 @@
+# Job Search Automation with Directus
+
+This is a small, dependency-free Node.js starter for tracking DevOps/SRE/Platform job leads in Directus.
+
+It does not scrape LinkedIn behind login. Instead it:
+
+- generates targeted LinkedIn search URLs from your filters,
+- stores search runs in Directus,
+- imports public job cards from LinkedIn, No Fluff Jobs, and Just Join IT into Directus,
+- ingests selected job leads from JSON into Directus,
+- keeps status, score, notes, language, workplace, and seniority in one backend.
+
+## Docker Compose
+
+Create the environment file:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set strong values for:
+
+- `DIRECTUS_PASSWORD`
+- `DIRECTUS_KEY`
+- `DIRECTUS_SECRET`
+- `POSTGRES_PASSWORD`
+
+Start the stack:
+
+```bash
+docker compose up -d
+```
+
+Services:
+
+- Directus: `http://localhost:8055`
+- Admin UI: `http://localhost:4173/admin.html`
+- job importer API: `http://localhost:4180`
+- Postgres: internal Docker network only
+
+Directus admin login comes from:
+
+```text
+DIRECTUS_EMAIL
+DIRECTUS_PASSWORD
+```
+
+## Directus collections
+
+After the stack is up, run:
+
+```bash
+npm run provision:directus
+```
+
+This logs into Directus with `DIRECTUS_EMAIL` / `DIRECTUS_PASSWORD` unless `DIRECTUS_TOKEN` is set.
+
+It creates:
+
+- `job_leads`
+- `job_search_runs`
+
+If your local shell cannot reach `localhost:8055`, run provisioning inside the Docker network:
+
+```bash
+docker compose run --rm directus-tools
+```
+
+## Admin UI
+
+Open:
+
+```text
+http://localhost:4173/admin.html
+```
+
+The admin UI lets you:
+
+- set Directus URL and token in browser local storage,
+- edit keywords, hybrid locations, remote locations, seniority, and posted-within window,
+- generate LinkedIn search URLs,
+- save generated search runs into Directus,
+- import concrete LinkedIn jobs from saved search runs,
+- manually add reviewed job leads,
+- review job leads with search, status/read filters, sorting, and read/unread marking.
+
+For browser writes, create a Directus static token:
+
+1. Open `http://localhost:8055`.
+2. Log in with `DIRECTUS_EMAIL` / `DIRECTUS_PASSWORD`.
+3. Open your user profile.
+4. Generate/copy a static token.
+5. Paste it into the admin UI connection settings.
+
+### Permissions checklist
+
+The admin UI needs collection access to:
+
+- `job_leads`: read, create, update
+- `job_search_runs`: read, create
+
+If you use the first admin user's static token, this should already work.
+
+If you create a separate non-admin Directus user/token, give its role or policy:
+
+- read/create/update permission on `job_leads`
+- read/create permission on `job_search_runs`
+- field access for all fields in both collections
+
+The `Test` button checks actual collection read access. It does not use `/server/ping`, because that can give misleading results for restricted tokens.
+
+## Local static admin fallback
+
+Without Docker, you can serve only the static admin UI:
+
+```bash
+npm run admin
+```
+
+Open:
+
+```text
+http://localhost:4173/admin.html
+```
+
+If Directus is not configured for browser requests, enable CORS in your Directus deployment for the admin UI origin.
+
+## Generate LinkedIn searches
+
+Edit [config/searches.json](config/searches.json).
+
+Current logic:
+
+- hybrid: Hungary, southern Poland, Slovakia, Romania
+- remote: European Union
+- seniority: entry + associate, which maps roughly to junior + medior
+- posted-within is edited in hours in the admin UI, then converted to LinkedIn's `r<seconds>` format
+- role queries use tighter phrases such as `"Site Reliability Engineer"` instead of loose `SRE English`
+- noisy security roles are excluded with `NOT "Security Engineer"`, `NOT "Cybersecurity"`, and similar terms
+- positive tech terms such as Kubernetes, Docker, Terraform, CI/CD, Azure, AWS, Linux, and Python increase score
+- negative signals such as senior, lead, principal, staff, architect, manager, and high years-of-experience requirements lower score or filter jobs out
+- `minimumScore` controls how strict the importer is before creating a lead
+- allowed languages controls which detected languages are imported; English, Hungarian, mixed, and unknown are enabled by default
+- blocked languages are stronger than allowed languages; `other` is blocked by default, and `unknown` can be blocked if you want strict language detection
+
+Run:
+
+```bash
+npm run search:linkedin
+```
+
+The generated URLs are saved into Directus `job_search_runs`.
+
+To test the search strategy without Directus:
+
+```bash
+npm run search:linkedin:dry
+```
+
+## Import LinkedIn job leads
+
+After saving search runs, open the admin UI and click **Import jobs** in the **Import LinkedIn Jobs** panel.
+
+The importer:
+
+- reads the latest saved `job_search_runs`,
+- fetches the selected public source pages,
+- parses visible job cards into `job_leads`,
+- skips existing leads by URL,
+- filters obvious senior/lead/principal/staff roles,
+- filters obvious non-Hungarian/non-English titles,
+- keeps noisy security roles out using the configured exclude terms.
+- scores jobs by seniority, location/workplace, positive tech matches, and negative signals.
+
+Supported source adapters:
+
+- LinkedIn: uses saved search runs.
+- No Fluff Jobs: uses configured search URLs from `source.nofluffjobs.searchUrls`.
+- Just Join IT: uses configured search URLs from `source.justjoinit.searchUrls`.
+
+You can also run it from the command line:
+
+```bash
+npm run import:linkedin -- --run-limit=25 --max-jobs-per-run=25
+```
+
+To test without writing leads:
+
+```bash
+npm run import:linkedin:dry -- --run-limit=1 --max-jobs-per-run=5
+```
+
+Inside Docker:
+
+```bash
+docker compose run --rm --entrypoint node directus-tools scripts/import-linkedin-jobs.mjs --run-limit=25 --max-jobs-per-run=25
+```
+
+## Stop the stack
+
+```bash
+docker compose down
+```
+
+Delete persisted local data:
+
+```bash
+docker compose down -v
+```
+
+## Ingest shortlisted jobs
+
+Create a JSON file like [data/jobs.sample.json](data/jobs.sample.json), then:
+
+```bash
+node scripts/ingest-jobs.mjs data/jobs.sample.json
+```
+
+Statuses to use:
+
+- `new`
+- `shortlisted`
+- `applied`
+- `rejected`
+- `ignored`
+
+## Why this shape
+
+LinkedIn automation that logs in, scrapes pages, or submits applications is brittle and can risk the account. This setup keeps the reliable part automated: search generation, structured tracking, dedupe, and application pipeline state in Directus.
