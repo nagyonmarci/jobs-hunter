@@ -1,0 +1,96 @@
+{
+  "filters": {
+    "keywords": [
+      "\"DevOps Engineer\"",
+      "\"Site Reliability Engineer\"",
+      "SRE",
+      "\"Platform Engineer\"",
+      "\"Cloud Engineer\"",
+      "\"Azure DevOps Engineer\"",
+      "\"Infrastructure Engineer\""
+    ],
+    "excludeKeywords": [
+      "\"Security Engineer\"",
+      "\"Cybersecurity\"",
+      "\"Application Security\"",
+      "\"Product Security\"",
+      "\"Security Architect\"",
+      "\"IT Security\""
+    ],
+    "positiveTech": [
+      "Kubernetes",
+      "Docker",
+      "Terraform",
+      "Ansible",
+      "CI/CD",
+      "GitHub Actions",
+      "GitLab CI",
+      "Jenkins",
+      "Azure DevOps",
+      "Linux",
+      "Bash",
+      "Python",
+      "AWS",
+      "Azure",
+      "GCP",
+      "Prometheus",
+      "Grafana",
+      "Helm",
+      "Argo CD"
+    ],
+    "negativeSignals": [
+      "senior",
+      "lead",
+      "principal",
+      "staff",
+      "manager",
+      "architect",
+      "security clearance",
+      "10+ years",
+      "8+ years",
+      "7+ years",
+      "5+ years"
+    ],
+    "minimumScore": 45,
+    "allowedLanguages": [
+      "english",
+      "hungarian",
+      "mixed",
+      "unknown"
+    ],
+    "blockedLanguages": [
+      "other"
+    ],
+    "hybridLocations": [
+      "Hungary",
+      "Krakow Metropolitan Area",
+      "Katowice Metropolitan Area",
+      "Wroclaw Metropolitan Area",
+      "Slovakia",
+      "Romania"
+    ],
+    "remoteLocations": [
+      "European Union"
+    ],
+    "experienceLevels": [
+      "entry",
+      "associate"
+    ],
+    "postedWithin": "r604800"
+  },
+  "source": {
+    "linkedin": {
+      "baseUrl": "https://www.linkedin.com/jobs/search/"
+    },
+    "justjoinit": {
+      "searchUrls": [
+        "https://justjoin.it/job-offers/poland-remote/devops"
+      ]
+    },
+    "nofluffjobs": {
+      "searchUrls": [
+        "https://nofluffjobs.com/pl/devops/remote"
+      ]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "source": "linkedin",
+    "source_id": "4417731131",
+    "title": "Junior DevOps Engineer",
+    "company": "Luxoft",
+    "location": "Bucharest, Romania",
+    "workplace": "hybrid",
+    "seniority": "junior",
+    "language": "english",
+    "url": "https://www.linkedin.com/jobs/view/4417731131/",
+    "apply_url": "https://www.linkedin.com/jobs/view/4417731131/",
+    "status": "new",
+    "score": 86,
+    "notes": "Easy Apply. Jenkins, Kubernetes, Ansible, Bash, Python. Requires very good written and spoken English."
+  },
+  {
+    "source": "linkedin",
+    "source_id": "4416907835",
+    "title": "Azure DevOps Engineer (junior/mid)",
+    "company": "Eviden",
+    "location": "Poland",
+    "workplace": "remote",
+    "seniority": "medior",
+    "language": "english",
+    "url": "https://www.linkedin.com/jobs/view/4416907835/",
+    "apply_url": "https://www.linkedin.com/jobs/view/4416907835/",
+    "status": "new",
+    "score": 82,
+    "notes": "Azure DevOps, ARM/Bicep, 1-2 years. Remote Poland."
+  }
+]
