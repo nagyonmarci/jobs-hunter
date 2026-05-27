@@ -6,9 +6,9 @@ It does not scrape LinkedIn behind login. Instead it:
 
 - generates targeted LinkedIn search URLs from your filters,
 - stores search runs in Directus,
-- imports public job cards from LinkedIn, No Fluff Jobs, and Just Join IT into Directus,
+- imports public job cards from LinkedIn, No Fluff Jobs, Just Join IT, We Work Remotely, and EuroTopTech into Directus,
 - ingests selected job leads from JSON into Directus,
-- keeps status, score, notes, language, workplace, and seniority in one backend.
+- keeps status, score, public salary, notes, language, workplace, and seniority in one backend.
 
 ## Docker Compose
 
@@ -60,6 +60,8 @@ It creates:
 - `job_leads`
 - `job_search_runs`
 
+`job_leads` stores normalized fields for each role, including source, source id, title, optional company, location, workplace, seniority, language, URL, apply URL, status, score, public salary/compensation, read state, and notes.
+
 If your local shell cannot reach `localhost:8055`, run provisioning inside the Docker network:
 
 ```bash
@@ -82,7 +84,7 @@ The admin UI lets you:
 - save generated search runs into Directus,
 - import concrete LinkedIn jobs from saved search runs,
 - manually add reviewed job leads,
-- review job leads with search, status/read filters, sorting, and read/unread marking.
+- review job leads with search, per-field filters, salary filtering, sorting, and read/unread marking.
 
 For browser writes, create a Directus static token:
 
@@ -166,6 +168,8 @@ The importer:
 - reads the latest saved `job_search_runs`,
 - fetches the selected public source pages,
 - parses visible job cards into `job_leads`,
+- stores public salary or compensation text when the source exposes it,
+- backfills salary on existing leads when the URL already exists and the salary field is still empty,
 - skips existing leads by URL,
 - filters obvious senior/lead/principal/staff roles,
 - filters obvious non-Hungarian/non-English titles,
@@ -175,8 +179,12 @@ The importer:
 Supported source adapters:
 
 - LinkedIn: uses saved search runs.
-- No Fluff Jobs: uses configured search URLs from `source.nofluffjobs.searchUrls`.
-- Just Join IT: uses configured search URLs from `source.justjoinit.searchUrls`.
+- No Fluff Jobs: uses configured search URLs from `source.nofluffjobs.searchUrls`; imports visible salary ranges when shown on the listing card.
+- Just Join IT: uses configured search URLs from `source.justjoinit.searchUrls`; imports structured `employmentTypes` salary ranges and ignores empty `0 - 0` ranges.
+- We Work Remotely: uses configured search URLs from `source.weworkremotely.searchUrls`.
+- EuroTopTech: uses configured search URLs from `source.eurotoptech.searchUrls`; imports public total compensation.
+
+Remote Rocketship and Wellfound are not enabled as source adapters because their public pages currently return bot/JavaScript protection to server-side fetches, which would make unattended imports unreliable.
 
 You can also run it from the command line:
 

@@ -410,7 +410,7 @@ async function loadLeads() {
   const params = new URLSearchParams({
     sort: $("leadSort").value || "-score",
     limit: String(Number($("leadLimit").value) || 100),
-    fields: "id,status,score,title,company,location,workplace,seniority,language,url,apply_url,is_read,notes"
+    fields: "id,status,score,title,company,location,workplace,seniority,language,url,apply_url,is_read,salary,notes"
   });
   appendLeadFilters(params);
 
@@ -425,6 +425,7 @@ function appendLeadFilters(params) {
     ["leadCompanyFilter", "company"],
     ["leadLocationFilter", "location"],
     ["leadNotesFilter", "notes"],
+    ["leadSalaryFilter", "salary"],
     ["leadUrlFilter", "url"]
   ];
   for (const [inputId, field] of textFilters) {
@@ -512,6 +513,7 @@ function renderCompactCard(lead) {
         ${lead.workplace ? `<span>${escapeHtml(lead.workplace)}</span>` : ""}
         ${lead.seniority ? `<span>${escapeHtml(lead.seniority)}</span>` : ""}
         ${lead.language ? `<span>${escapeHtml(lead.language)}</span>` : ""}
+        ${lead.salary ? `<span class="salary-pill">${escapeHtml(lead.salary)}</span>` : ""}
         <span class="read-toggle" data-action="toggle-read" title="Toggle read/unread">${lead.is_read ? "read" : "unread"}</span>
       </div>
       <div class="compact-actions">
@@ -534,6 +536,7 @@ function renderLeads() {
       lead.workplace,
       lead.seniority,
       lead.language,
+      lead.salary,
       lead.notes
     ].join(" ")).includes(query))
     : leadRows;
@@ -567,6 +570,7 @@ function renderLeadCard(lead) {
           ${lead.workplace ? `<span>${escapeHtml(lead.workplace)}</span>` : ""}
           ${lead.seniority ? `<span>${escapeHtml(lead.seniority)}</span>` : ""}
           ${lead.language ? `<span>${escapeHtml(lead.language)}</span>` : ""}
+          ${lead.salary ? `<span class="salary-pill">${escapeHtml(lead.salary)}</span>` : ""}
           <span>${lead.is_read ? "read" : "unread"}</span>
         </div>
         ${visibleNotes ? `<p class="lead-notes">${escapeHtml(truncate(visibleNotes, 260))}</p>` : ""}
@@ -649,6 +653,7 @@ async function saveLead(event) {
     apply_url: url,
     status: "new",
     score: scoreValue ? Number(scoreValue) : null,
+    salary: String(form.get("salary") || "").trim() || null,
     is_read: false,
     notes: String(form.get("notes") || "").trim()
   };
@@ -692,6 +697,7 @@ async function importLinkedinJobs() {
 
     const message = [
       `Created ${body.created} job leads.`,
+      body.salaryUpdated ? `Updated salaries ${body.salaryUpdated}.` : "",
       `Parsed ${body.parsed}.`,
       `Skipped existing ${body.skippedExisting}.`,
       `Filtered ${body.skippedFiltered}.`,
@@ -810,6 +816,7 @@ $("leadSearch").addEventListener("input", renderLeads);
   "leadCompanyFilter",
   "leadLocationFilter",
   "leadNotesFilter",
+  "leadSalaryFilter",
   "leadUrlFilter",
   "leadScoreMinFilter",
   "leadScoreMaxFilter"

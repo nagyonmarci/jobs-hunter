@@ -184,6 +184,8 @@
               <label class="check"><input type="checkbox" name="importSource" value="linkedin" checked> LinkedIn</label>
               <label class="check"><input type="checkbox" name="importSource" value="nofluffjobs" checked> No Fluff Jobs</label>
               <label class="check"><input type="checkbox" name="importSource" value="justjoinit" checked> Just Join IT</label>
+              <label class="check"><input type="checkbox" name="importSource" value="weworkremotely" checked> We Work Remotely</label>
+              <label class="check"><input type="checkbox" name="importSource" value="eurotoptech" checked> EuroTopTech</label>
             </fieldset>
             <label>
               Runs to process
@@ -228,6 +230,7 @@
             </select>
             <input name="url" placeholder="LinkedIn/job URL" required>
             <input name="score" type="number" min="0" max="100" placeholder="Score">
+            <input name="salary" placeholder="Salary / compensation">
             <textarea name="notes" rows="3" placeholder="Notes"></textarea>
             <button type="submit">Save lead</button>
           </form>
@@ -267,6 +270,10 @@
             <label>
               Notes
               <input id="leadNotesFilter" type="search" placeholder="Kubernetes, on-call">
+            </label>
+            <label>
+              Salary
+              <input id="leadSalaryFilter" type="search" placeholder="EUR, PLN, 100000">
             </label>
             <label>
               URL
@@ -339,6 +346,7 @@
                 <option value="id">Oldest first</option>
                 <option value="title">Title A-Z</option>
                 <option value="company">Company A-Z</option>
+                <option value="salary">Salary A-Z</option>
               </select>
             </label>
             <label>

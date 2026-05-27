@@ -41,6 +41,7 @@ for (const job of jobs) {
     apply_url: job.apply_url || job.url,
     status: job.status || "new",
     score: Number.isInteger(job.score) ? job.score : null,
+    salary: job.salary || null,
     is_read: Boolean(job.is_read),
     notes: job.notes || null
   };

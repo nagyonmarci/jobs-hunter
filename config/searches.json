@@ -91,6 +91,16 @@
       "searchUrls": [
         "https://nofluffjobs.com/pl/devops/remote"
       ]
+    },
+    "weworkremotely": {
+      "searchUrls": [
+        "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs"
+      ]
+    },
+    "eurotoptech": {
+      "searchUrls": [
+        "https://www.eurotoptech.com/jobs/role/devops"
+      ]
     }
   }
 }

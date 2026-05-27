@@ -25,6 +25,7 @@ export async function importLinkedInJobs({
     fetched: 0,
     parsed: 0,
     created: 0,
+    salaryUpdated: 0,
     skippedExisting: 0,
     skippedFiltered: 0,
     filterReasons: {},
@@ -69,6 +70,13 @@ export async function importLinkedInJobs({
 
         const existing = dryRun ? null : await findExistingByUrl(client, enrichedJob.url);
         if (existing) {
+          if (!existing.salary && enrichedJob.salary) {
+            await client.request(`/items/job_leads/${encodeURIComponent(existing.id)}`, {
+              method: "PATCH",
+              body: JSON.stringify({ salary: enrichedJob.salary })
+            });
+            summary.salaryUpdated += 1;
+          }
           summary.skippedExisting += 1;
           continue;
         }
@@ -140,6 +148,30 @@ async function loadSourceRuns(directus, config, sources, runLimit) {
       url
     })));
   }
+  if (requested.has("weworkremotely")) {
+    runs.push(...sourceUrls(config, "weworkremotely", [
+      "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs"
+    ]).map((url, index) => ({
+      id: `weworkremotely-${index + 1}`,
+      source: "weworkremotely",
+      query: "DevOps remote",
+      location: "Remote",
+      workplace: "remote",
+      url
+    })));
+  }
+  if (requested.has("eurotoptech")) {
+    runs.push(...sourceUrls(config, "eurotoptech", [
+      "https://www.eurotoptech.com/jobs/role/devops"
+    ]).map((url, index) => ({
+      id: `eurotoptech-${index + 1}`,
+      source: "eurotoptech",
+      query: "DevOps Europe",
+      location: "Europe",
+      workplace: "unknown",
+      url
+    })));
+  }
   return runs;
 }
 
@@ -160,7 +192,7 @@ export async function fetchSourceHtml(url) {
     }
   });
   if (!response.ok) {
-    throw new Error(`LinkedIn returned ${response.status} for ${url}`);
+    throw new Error(`Source returned ${response.status} for ${url}`);
   }
   return response.text();
 }
@@ -237,6 +269,7 @@ export function extractLinkedInJobs(html, run, config) {
       apply_url: `https://www.linkedin.com/jobs/view/${sourceId}/`,
       status: "new",
       score: scoreJob({ title, location, run, config }),
+      salary: null,
       is_read: false,
       notes: null
     });
@@ -248,6 +281,8 @@ export function extractLinkedInJobs(html, run, config) {
 function extractJobsForRun(html, run, config) {
   if (run.source === "justjoinit") return extractJustJoinItJobs(html, run, config);
   if (run.source === "nofluffjobs") return extractNoFluffJobs(html, run, config);
+  if (run.source === "weworkremotely") return extractWeWorkRemotelyJobs(html, run, config);
+  if (run.source === "eurotoptech") return extractEuroTopTechJobs(html, run, config);
   return extractLinkedInJobs(html, run, config);
 }
 
@@ -261,6 +296,7 @@ function extractJustJoinItJobs(html, run, config) {
         ...(offer.requiredSkills || []),
         ...(offer.niceToHaveSkills || [])
       ].filter(Boolean).join(", ");
+      const salary = formatJustJoinItSalary(offer.employmentTypes);
       const location = [offer.city, offer.street].filter(Boolean).join(", ") || run.location;
       return {
         source: "justjoinit",
@@ -275,6 +311,7 @@ function extractJustJoinItJobs(html, run, config) {
         apply_url: `https://justjoin.it/job-offer/${offer.slug}`,
         status: "new",
         score: scoreJob({ title: offer.title, location, description: notes, run, config }),
+        salary,
         is_read: false,
         notes: notes || null
       };
@@ -306,6 +343,34 @@ function extractJustJoinItOffers(html) {
   return offers;
 }
 
+function formatJustJoinItSalary(employmentTypes = []) {
+  const paidTypes = employmentTypes
+    .filter((item) => item && (Number.isFinite(Number(item.from)) || Number.isFinite(Number(item.to)) || Number.isFinite(Number(item.fromPerUnit)) || Number.isFinite(Number(item.toPerUnit))));
+  if (!paidTypes.length) return null;
+
+  const preferred = paidTypes.filter((item) => item.currencySource === "original");
+  const items = preferred.length ? preferred : paidTypes.filter((item) => item.currency === "EUR");
+  const source = items.length ? items : paidTypes;
+  const seen = new Set();
+  const formatted = source
+    .map((item) => {
+      const from = item.from ?? item.fromPerUnit;
+      const to = item.to ?? item.toPerUnit;
+      const amount = formatSalaryRange(from, to);
+      if (!amount) return "";
+      const key = `${item.type}|${amount}|${item.currency}|${item.unit}|${item.gross}`;
+      if (seen.has(key)) return "";
+      seen.add(key);
+      const type = item.type ? `${item.type}: ` : "";
+      const unit = item.unit ? `/${item.unit}` : "";
+      const gross = typeof item.gross === "boolean" ? ` ${item.gross ? "gross" : "net"}` : "";
+      return `${type}${amount} ${item.currency || ""}${unit}${gross}`.trim();
+    })
+    .filter(Boolean);
+
+  return formatted.slice(0, 3).join("; ") || null;
+}
+
 function extractNoFluffJobs(html, run, config) {
   const cards = [];
   const cardPattern = /<a\b[^>]*class="[^"]*posting-list-item[^"]*"[^>]*href="([^"]+)"[\s\S]*?<\/a>/gi;
@@ -333,6 +398,7 @@ function extractNoFluffJobs(html, run, config) {
     ]) || run.location;
     const url = href.startsWith("http") ? href : `https://nofluffjobs.com${href}`;
     const notes = tags.join(", ");
+    const salary = extractNoFluffJobsSalary(segment);
     cards.push({
       source: "nofluffjobs",
       source_id: sourceId,
@@ -346,8 +412,133 @@ function extractNoFluffJobs(html, run, config) {
       apply_url: url,
       status: "new",
       score: scoreJob({ title, location, description: notes, run, config }),
+      salary,
       is_read: false,
       notes: notes || null
+    });
+  }
+  return cards;
+}
+
+function extractNoFluffJobsSalary(segment) {
+  const text = cleanText(segment).replace(/\u00a0/g, " ");
+  const match = /(\d[\d\s]{1,12})\s*[–-]\s*(\d[\d\s]{1,12})\s*(PLN|EUR|USD|GBP|CHF)\b/i.exec(text);
+  if (!match) return null;
+  return `${formatSalaryNumber(match[1])} - ${formatSalaryNumber(match[2])} ${match[3].toUpperCase()}`;
+}
+
+function extractWeWorkRemotelyJobs(html, run, config) {
+  const jobs = [];
+  const seen = new Set();
+  const cardPattern = /<li\b[^>]*new-listing-container[\s\S]*?<\/li>/gi;
+  for (const match of html.matchAll(cardPattern)) {
+    const segment = match[0];
+    const href = decodeHtml(/<a\b[^>]*class="[^"]*listing-link--unlocked[^"]*"[^>]*href="([^"]+)"/i.exec(segment)?.[1] || "");
+    if (!href || !href.includes("/remote-jobs/")) continue;
+    const sourceId = href.split("/").filter(Boolean).pop();
+    if (!sourceId || seen.has(sourceId)) continue;
+    seen.add(sourceId);
+
+    const title = firstText(segment, [
+      /class="[^"]*new-listing__header__title__text[^"]*"[^>]*>([\s\S]*?)<\/span>/i
+    ]);
+    if (!title) continue;
+
+    const company = firstText(segment, [
+      /class="[^"]*new-listing__company-name[^"]*"[^>]*>([\s\S]*?)<\/p>/i
+    ]);
+    const location = firstText(segment, [
+      /class="[^"]*new-listing__company-headquarters[^"]*"[^>]*>([\s\S]*?)<\/p>/i
+    ]) || run.location;
+    const tags = [...segment.matchAll(/class="[^"]*new-listing__categories__category[^"]*"[^>]*>([\s\S]*?)<\/p>/gi)]
+      .map((tag) => cleanText(tag[1]))
+      .filter(Boolean);
+    const url = href.startsWith("http") ? href : `https://weworkremotely.com${href}`;
+    const notes = tags.join(", ");
+
+    jobs.push({
+      source: "weworkremotely",
+      source_id: sourceId,
+      title,
+      company: company || null,
+      location,
+      workplace: "remote",
+      seniority: inferSeniority(title, run.query),
+      language: detectLanguage(`${title} ${notes}`),
+      url,
+      apply_url: url,
+      status: "new",
+      score: scoreJob({ title, location, description: notes, run, config }),
+      salary: null,
+      is_read: false,
+      notes: notes || null
+    });
+  }
+  return jobs;
+}
+
+function extractEuroTopTechJobs(html, run, config) {
+  const cards = extractEuroTopTechCards(html);
+  const seen = new Set();
+  return cards
+    .map((card) => {
+      const sourceId = stableId(`${card.company}|${card.title}|${card.location}|${card.compensation}`);
+      return { ...card, sourceId };
+    })
+    .filter((card) => card.title && !seen.has(card.sourceId) && seen.add(card.sourceId))
+    .map((card) => {
+      const notes = [
+        card.workplace ? `Workplace: ${card.workplace}` : "",
+        card.seniority ? `Seniority: ${card.seniority}` : ""
+      ].filter(Boolean).join(", ");
+      const url = `${run.url}#${card.sourceId}`;
+      return {
+        source: "eurotoptech",
+        source_id: card.sourceId,
+        title: card.title,
+        company: card.company || null,
+        location: card.location || run.location,
+        workplace: mapWorkplace(card.workplace, inferWorkplace(card.location) || run.workplace),
+        seniority: mapSeniority(card.seniority, card.title),
+        language: detectLanguage(`${card.title} ${notes}`),
+        url,
+        apply_url: run.url,
+        status: "new",
+        score: scoreJob({ title: card.title, location: card.location, description: notes, run, config }),
+        salary: card.compensation || null,
+        is_read: false,
+        notes: notes || null
+      };
+    });
+}
+
+function extractEuroTopTechCards(html) {
+  const titleMatches = [...html.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)]
+    .filter((match) => !/Explore\s+devops\s+opportunities/i.test(cleanText(match[1])));
+  const cards = [];
+  for (let index = 0; index < titleMatches.length; index += 1) {
+    const current = titleMatches[index];
+    const next = titleMatches[index + 1]?.index || html.length;
+    const before = html.slice(Math.max(0, current.index - 2500), current.index);
+    const after = html.slice(current.index, Math.min(html.length, next));
+    const segment = `${before}${after}`;
+    const title = cleanText(current[1]);
+    const chipLabels = [...before.matchAll(/class="[^"]*MuiChip-label[^"]*"[^>]*>([\s\S]*?)<\/span>/gi)]
+      .map((chip) => cleanText(chip[1]))
+      .filter(Boolean);
+    const values = [...after.matchAll(/class="[^"]*MuiTypography-body[12][^"]*"[^>]*>([\s\S]*?)<\/p>/gi)]
+      .map((value) => cleanText(value[1]))
+      .filter(Boolean);
+    const location = firstText(segment, [
+      /data-testid="LocationOnOutlinedIcon"[\s\S]*?<p\b[^>]*>([\s\S]*?)<\/p>/i
+    ]);
+    cards.push({
+      title,
+      company: chipLabels.at(-1) || "",
+      location,
+      workplace: values.find((value) => /remote|hybrid|onsite/i.test(value)) || "",
+      seniority: values.find((value) => /junior|mid-level|middle|senior|lead/i.test(value)) || "",
+      compensation: values.find((value) => /€|\$|£/.test(value)) || ""
     });
   }
   return cards;
@@ -408,6 +599,8 @@ function firstText(segment, patterns) {
 
 function cleanText(value) {
   return decodeHtml(value)
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -426,6 +619,33 @@ function decodeHtml(value) {
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
     .replace(/&#x([a-f0-9]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
     .replace(/&([a-z]+);/gi, (_, name) => named[name] || `&${name};`);
+}
+
+function stableId(value) {
+  let hash = 0;
+  for (const char of normalize(value)) {
+    hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function formatSalaryRange(from, to) {
+  const fromNumber = Number(from);
+  const toNumber = Number(to);
+  if ((Number.isFinite(fromNumber) || Number.isFinite(toNumber)) && fromNumber <= 0 && toNumber <= 0) return "";
+  if (Number.isFinite(fromNumber) && Number.isFinite(toNumber)) {
+    return `${formatSalaryNumber(fromNumber)} - ${formatSalaryNumber(toNumber)}`;
+  }
+  if (Number.isFinite(fromNumber)) return `from ${formatSalaryNumber(fromNumber)}`;
+  if (Number.isFinite(toNumber)) return `up to ${formatSalaryNumber(toNumber)}`;
+  return "";
+}
+
+function formatSalaryNumber(value) {
+  const normalized = String(value).replace(/\s+/g, "");
+  const number = Number(normalized);
+  if (!Number.isFinite(number)) return normalized.trim();
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(number);
 }
 
 function wantedJobFilterReason(job, config) {
@@ -493,10 +713,12 @@ function detectLanguage(value) {
     "experiență", "cerințe", "echipă", "abilități",
     "skúsenosti", "požiadavky", "tím", "zručnosti",
     "experiencia", "requisitos", "equipo", "responsabilidades",
-    "expérience", "compétences", "équipe", "responsabilités"
+    "expérience", "compétences", "équipe", "responsabilités",
+    "pessoa", "engenheira", "profissional", "pleno", "remoto", "habilidades", "experiência"
   ]);
 
-  if (/[æøåąćęłńóśźżăâîșțáéíóúüñçôû]/i.test(value) || otherHits >= 2) return "other";
+  if (/\b(pessoa|engenheir[ao]|profissional|pleno|remoto)\b/i.test(value)) return "other";
+  if (/[æøåąćęłńóśźżăâîșțáéíóúüñçôûãõ]/i.test(value) || otherHits >= 2) return "other";
   if (hungarianHits >= 2 && englishHits >= 2) return "mixed";
   if (hungarianHits >= 2 || /[őű]/i.test(value)) return "hungarian";
   if (englishHits >= 2) return "english";
@@ -545,7 +767,7 @@ function inferSeniority(title, query) {
 
 function mapSeniority(value, title = "") {
   const normalized = normalize(value);
-  if (normalized === "mid" || normalized === "regular") return "medior";
+  if (normalized === "mid" || normalized === "mid-level" || normalized === "regular") return "medior";
   if (normalized === "junior") return "junior";
   if (normalized === "senior") return "senior";
   return inferSeniority(title, "");
@@ -575,7 +797,7 @@ async function findExistingByUrl(directus, url) {
   const params = new URLSearchParams({
     "filter[url][_eq]": url,
     limit: "1",
-    fields: "id,url"
+    fields: "id,url,salary"
   });
   const response = await directus.request(`/items/job_leads?${params.toString()}`);
   return response.data?.[0] || null;

@@ -73,6 +73,7 @@ await ensureField("job_leads", "url", "string", { required: true, unique: true, 
 await ensureField("job_leads", "apply_url", "string", { maxLength: 500 });
 await ensureField("job_leads", "status", "string", { required: true, maxLength: 30, note: "new, shortlisted, applied, rejected, ignored" });
 await ensureField("job_leads", "score", "integer");
+await ensureField("job_leads", "salary", "string", { maxLength: 255, note: "Public salary or compensation text when available." });
 await ensureField("job_leads", "is_read", "boolean", { note: "Whether the lead was reviewed in the admin UI." });
 await ensureField("job_leads", "notes", "text");
 

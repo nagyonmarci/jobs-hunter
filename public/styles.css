@@ -333,6 +333,11 @@ td a {
   font-weight: 700;
 }
 
+.tag-row .salary-pill {
+  color: #174f38;
+  background: #e7f5ed;
+}
+
 .score-pill {
   justify-content: center;
   min-width: 42px;
