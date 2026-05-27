@@ -1,0 +1,18 @@
+{
+  "name": "job-search-directus-automation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "provision:directus": "node scripts/provision-directus.mjs",
+    "admin": "python3 -m http.server 4173 --directory public",
+    "search:linkedin": "node scripts/generate-linkedin-searches.mjs",
+    "search:linkedin:dry": "node scripts/generate-linkedin-searches.mjs --dry-run",
+    "import:linkedin": "node scripts/import-linkedin-jobs.mjs",
+    "import:linkedin:dry": "node scripts/import-linkedin-jobs.mjs --dry-run",
+    "ingest:jobs": "node scripts/ingest-jobs.mjs data/jobs.sample.json"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
