@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN --mount=type=cache,target=/root/.npm \
@@ -14,7 +14,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD wget -qO /dev/null http://127.0.0.1:80/admin.html || exit 1
 
 # Node application runtime (build target: app, also the default target)
-FROM node:20-alpine AS app
+FROM node:26-alpine AS app
 ENV NODE_ENV=production
 WORKDIR /app
 
