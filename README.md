@@ -1,6 +1,8 @@
 # Job Search Automation with Directus
 
 [![CI](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml)
+[![OSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nagyonmarci/jobs-hunter/badge)](https://securityscorecards.dev/viewer/?uri=github.com/nagyonmarci/jobs-hunter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
 
@@ -338,15 +340,12 @@ Every push and pull request runs:
 - ESLint, Prettier check, and the LinkedIn search dry-run on Node 20 and 22
 - Vitest with v8 coverage (artifact uploaded for Node 20)
 - gitleaks secret scanning
+- CodeQL static analysis (JavaScript)
 - A Docker image build smoke test
 
-Dependabot opens weekly updates for npm packages, GitHub Actions, and the
-Dockerfile base image.
-
-> CodeQL code scanning and OSSF Scorecard are not enabled here because they
-> require a public repository (or GitHub Advanced Security on a private one).
-> To enable them, make the repository public and re-add a CodeQL job to
-> `ci.yml` plus a Scorecard workflow.
+OSSF Scorecard runs weekly and on every push to `main`. Dependabot opens
+weekly updates for npm packages, GitHub Actions, and the Dockerfile base
+image.
 
 ## Releases
 

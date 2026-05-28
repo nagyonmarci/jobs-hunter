@@ -78,6 +78,29 @@ jobs:
       - name: Scan
         run: /tmp/gitleaks detect --source . --config .gitleaks.toml --redact --verbose
 
+  codeql:
+    name: CodeQL (javascript)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"
+
   docker-build:
     name: Docker build (smoke)
     runs-on: ubuntu-latest
