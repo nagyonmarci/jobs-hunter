@@ -60,6 +60,8 @@ jobs:
   gitleaks:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.18.4
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,11 +69,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_CONFIG: .gitleaks.toml
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks version
+
+      - name: Scan
+        run: /tmp/gitleaks detect --source . --config .gitleaks.toml --redact --verbose
 
   codeql:
     name: CodeQL (javascript)

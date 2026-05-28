@@ -9,9 +9,11 @@ const outputDir = "docs/screenshots";
 
 await fs.mkdir(outputDir, { recursive: true });
 
-const target = await (await fetch(`http://127.0.0.1:${chromePort}/json/new?${encodeURIComponent(baseUrl)}`, {
-  method: "PUT"
-})).json();
+const target = await (
+  await fetch(`http://127.0.0.1:${chromePort}/json/new?${encodeURIComponent(baseUrl)}`, {
+    method: "PUT"
+  })
+).json();
 
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 let id = 0;
@@ -69,21 +71,21 @@ const settings = {
   directusToken: "",
   directusEmail,
   keywords: [
-    "\"DevOps Engineer\"",
-    "\"Site Reliability Engineer\"",
+    '"DevOps Engineer"',
+    '"Site Reliability Engineer"',
     "SRE",
-    "\"Platform Engineer\"",
-    "\"Cloud Engineer\"",
-    "\"Azure DevOps Engineer\"",
-    "\"Infrastructure Engineer\""
+    '"Platform Engineer"',
+    '"Cloud Engineer"',
+    '"Azure DevOps Engineer"',
+    '"Infrastructure Engineer"'
   ],
   excludeKeywords: [
-    "\"Security Engineer\"",
-    "\"Cybersecurity\"",
-    "\"Application Security\"",
-    "\"Product Security\"",
-    "\"Security Architect\"",
-    "\"IT Security\""
+    '"Security Engineer"',
+    '"Cybersecurity"',
+    '"Application Security"',
+    '"Product Security"',
+    '"Security Architect"',
+    '"IT Security"'
   ],
   positiveTech: [
     "Kubernetes",

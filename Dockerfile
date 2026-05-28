@@ -4,7 +4,7 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN --mount=type=cache,target=/root/.npm \
-    if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+    if [ -f package-lock.json ]; then npm ci --omit=dev --ignore-scripts; else npm install --omit=dev --ignore-scripts; fi
 
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
