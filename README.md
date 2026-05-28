@@ -323,14 +323,23 @@ npm run test:coverage  # Vitest + v8 coverage
 `lint-staged` runs ESLint and Prettier on staged files via the
 `pre-commit` hook; the `pre-push` hook runs the test suite.
 
-### Docker image
+### Docker images
 
-A minimal multi-stage image is published from tagged releases to
-`ghcr.io/nagyonmarci/jobs-hunter`. To build locally:
+The multi-stage [`Dockerfile`](Dockerfile) builds two named targets:
+
+- `app` — the Node runtime (importer/search scripts), published as
+  `ghcr.io/nagyonmarci/jobs-hunter-app`
+- `admin` — the static admin UI served by nginx, published as
+  `ghcr.io/nagyonmarci/jobs-hunter-admin`
+
+Build either target locally:
 
 ```bash
-docker build -t jobs-hunter:dev .
-docker run --rm jobs-hunter:dev scripts/generate-linkedin-searches.mjs --dry-run
+docker build --target app -t jobs-hunter-app:dev .
+docker run --rm jobs-hunter-app:dev scripts/generate-linkedin-searches.mjs --dry-run
+
+docker build --target admin -t jobs-hunter-admin:dev .
+docker run --rm -p 8080:80 jobs-hunter-admin:dev   # http://localhost:8080/admin.html
 ```
 
 ## Continuous integration
@@ -340,8 +349,15 @@ Every push and pull request runs:
 - ESLint, Prettier check, and the LinkedIn search dry-run on Node 20 and 22
 - Vitest with v8 coverage (artifact uploaded for Node 20)
 - gitleaks secret scanning
-- CodeQL static analysis (JavaScript)
-- A Docker image build smoke test
+- CodeQL and Semgrep static analysis
+- Hadolint (Dockerfile) and Checkov (IaC) scanning
+- A build of both image targets plus a Trivy vulnerability scan
+- dependency review on pull requests
+
+Secret scanning, Trivy `CRITICAL` (fixable) findings, and `critical`
+dependency advisories block the build; the SAST/IaC scanners are
+informational and publish to the **Security → Code scanning** tab. A sticky
+`security-summary` comment reports per-check status on each pull request.
 
 OSSF Scorecard runs weekly and on every push to `main`. Dependabot opens
 weekly updates for npm packages, GitHub Actions, and the Dockerfile base
@@ -349,12 +365,28 @@ image.
 
 ## Releases
 
-Releases are cut by pushing a `vMAJOR.MINOR.PATCH` tag. The
-[`release` workflow](.github/workflows/release.yml) builds and publishes
-a multi-tag container image to GHCR and creates a GitHub release with
-auto-generated notes.
+Pushes to `main` publish `latest` and `sha-<short>` images; pushing a
+`vMAJOR.MINOR.PATCH` tag additionally publishes semver-tagged images and
+creates a GitHub release with auto-generated notes. The
+[`release` workflow](.github/workflows/release.yml) builds both targets
+(`app` and `admin`) for `linux/amd64` and `linux/arm64`, attaches SLSA
+provenance and an SBOM, and signs each image with cosign (keyless OIDC).
+
+Verify a published image's signature:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp "https://github.com/nagyonmarci/jobs-hunter/.github/workflows/release.yml@.*" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/nagyonmarci/jobs-hunter-app:latest
+```
 
 ## Security
 
 Please follow [SECURITY.md](.github/SECURITY.md) to report
 vulnerabilities privately rather than opening a public issue.
+
+Container images are signed with cosign and ship with an SBOM and SLSA
+provenance; see [Releases](#releases) for verification. The CI security
+gates and recommended branch protection are documented in
+[SECURITY.md](.github/SECURITY.md).

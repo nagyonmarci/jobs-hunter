@@ -28,6 +28,37 @@ to ship a fix or a documented mitigation within **30 days** of triage,
 depending on severity and complexity. We will credit reporters in release
 notes unless anonymity is requested.
 
+## Automated security checks
+
+Every pull request and push to `main` runs a security pipeline
+(`.github/workflows/ci.yml`). Gating policy:
+
+- **Blocking:** secret scan (gitleaks), Trivy image scan on fixable
+  `CRITICAL` vulnerabilities, and dependency review on `critical` advisories.
+- **Informational:** Semgrep SAST, CodeQL, Hadolint (Dockerfile), and Checkov
+  (IaC) publish findings to the **Security → Code scanning** tab without
+  failing the build.
+
+A sticky `security-summary` comment on each pull request reports the status of
+every check.
+
+Recommended required status checks for branch protection on `main` (set by the
+repository owner in the GitHub UI):
+
+- `Lint, format, test (Node 20)`
+- `Lint, format, test (Node 22)`
+- `Secret scan (gitleaks)`
+- `CodeQL (javascript)`
+- `SAST (semgrep)`
+- `Dockerfile lint (hadolint)`
+- `IaC scan (checkov)`
+- `Image build & scan (app)`
+- `Image build & scan (admin)`
+- `Dependency review`
+
+Published container images are built multi-arch, get SLSA provenance and an
+SBOM, and are signed with cosign keyless (`.github/workflows/release.yml`).
+
 ## Scope
 
 In scope:

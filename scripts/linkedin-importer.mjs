@@ -831,6 +831,7 @@ function detectLanguage(value) {
 
 function countMatches(text, words) {
   return words.reduce(
+    // eslint-disable-next-line security/detect-non-literal-regexp -- word is escaped via escapeRegExp
     (count, word) => count + (new RegExp(`\\b${escapeRegExp(word)}\\b`, "i").test(text) ? 1 : 0),
     0
   );
