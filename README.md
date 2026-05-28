@@ -149,6 +149,27 @@ If you create a separate non-admin Directus user/token, give its role or policy:
 
 The `Test` button checks actual collection read access. It does not use `/server/ping`, because that can give misleading results for restricted tokens.
 
+## Screenshots
+
+### Search Setup
+
+![Search setup](docs/screenshots/admin-setup.png)
+
+### Job Leads
+
+![Job leads list](docs/screenshots/job-leads-list.png)
+
+### Salary Filter
+
+![Salary filter](docs/screenshots/job-leads-salary-filter.png)
+
+To refresh these screenshots locally, start a Chrome instance with remote debugging and run the capture script:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --headless=new --remote-debugging-port=9223 --user-data-dir=/tmp/jobs-hunter-chrome --window-size=1440,1000 about:blank
+node scripts/capture-readme-screenshots.mjs
+```
+
 ## Local static admin fallback
 
 Without Docker, you can serve only the static admin UI:
