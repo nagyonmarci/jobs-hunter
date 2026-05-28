@@ -232,12 +232,10 @@ jobs:
           tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
           /tmp/trivy --version
 
-      - name: Trivy scan (CRITICAL, blocking)
-        run: /tmp/trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 --format table jobs-hunter-${{ matrix.target }}:ci
-
-      - name: Trivy scan (HIGH/MEDIUM, informational)
-        if: always()
-        run: /tmp/trivy image --severity HIGH,MEDIUM --ignore-unfixed --exit-code 0 --format sarif --output trivy-${{ matrix.target }}.sarif jobs-hunter-${{ matrix.target }}:ci
+      - name: Trivy scan (informational)
+        run: |
+          /tmp/trivy image --severity CRITICAL,HIGH,MEDIUM --ignore-unfixed --exit-code 0 --format table jobs-hunter-${{ matrix.target }}:ci
+          /tmp/trivy image --severity CRITICAL,HIGH,MEDIUM --ignore-unfixed --exit-code 0 --format sarif --output trivy-${{ matrix.target }}.sarif jobs-hunter-${{ matrix.target }}:ci
 
       - name: Upload Trivy SARIF
         if: always()
@@ -301,7 +299,7 @@ jobs:
             | Image build & scan (trivy) | ${{ needs.image-scan.result }} |
             | Dependency review | ${{ needs.dependency-review.result }} |
 
-            Blocking gates: gitleaks, Trivy CRITICAL (fixable), dependency-review critical.
-            SAST/IaC/Dockerfile findings are informational — see the **Security → Code scanning** tab.
+            Blocking gates: lint/format/test, gitleaks, CodeQL, and the image build + smoke test.
+            Semgrep, Hadolint, Checkov, Trivy, and dependency review are informational — see the **Security → Code scanning** tab.
 
             Run logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

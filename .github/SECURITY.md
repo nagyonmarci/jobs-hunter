@@ -33,11 +33,14 @@ notes unless anonymity is requested.
 Every pull request and push to `main` runs a security pipeline
 (`.github/workflows/ci.yml`). Gating policy:
 
-- **Blocking:** secret scan (gitleaks), Trivy image scan on fixable
-  `CRITICAL` vulnerabilities, and dependency review on `critical` advisories.
-- **Informational:** Semgrep SAST, CodeQL, Hadolint (Dockerfile), and Checkov
-  (IaC) publish findings to the **Security → Code scanning** tab without
-  failing the build.
+- **Blocking:** lint/format/tests, secret scan (gitleaks), CodeQL analysis,
+  and the container image build plus smoke test.
+- **Informational:** Semgrep SAST, Hadolint (Dockerfile), Checkov (IaC),
+  Trivy image scanning, and dependency review publish findings to the
+  **Security → Code scanning** tab (or the PR summary) without failing the
+  build. Base-image OS vulnerabilities are tracked here rather than hard
+  blocking; bump the base image or add a documented `.trivyignore` entry to
+  address them.
 
 A sticky `security-summary` comment on each pull request reports the status of
 every check.

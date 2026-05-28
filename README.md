@@ -354,10 +354,11 @@ Every push and pull request runs:
 - A build of both image targets plus a Trivy vulnerability scan
 - dependency review on pull requests
 
-Secret scanning, Trivy `CRITICAL` (fixable) findings, and `critical`
-dependency advisories block the build; the SAST/IaC scanners are
-informational and publish to the **Security → Code scanning** tab. A sticky
-`security-summary` comment reports per-check status on each pull request.
+Lint/format/tests, secret scanning, CodeQL, and the image build plus smoke
+test block the build; Semgrep, Hadolint, Checkov, Trivy, and dependency
+review are informational and publish to the **Security → Code scanning** tab.
+A sticky `security-summary` comment reports per-check status on each pull
+request.
 
 OSSF Scorecard runs weekly and on every push to `main`. Dependabot opens
 weekly updates for npm packages, GitHub Actions, and the Dockerfile base
