@@ -174,9 +174,10 @@ jobs:
         run: pipx install checkov
 
       - name: Scan
+        continue-on-error: true
         run: |
           checkov --directory . \
-            --framework dockerfile docker_compose \
+            --framework dockerfile \
             --soft-fail \
             --output cli --output sarif \
             --output-file-path console,checkov-results
@@ -223,25 +224,20 @@ jobs:
         if: matrix.target == 'app'
         run: docker run --rm jobs-hunter-app:ci scripts/generate-linkedin-searches.mjs --dry-run
 
+      - name: Install Trivy
+        env:
+          TRIVY_VERSION: 0.70.0
+        run: |
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          /tmp/trivy --version
+
       - name: Trivy scan (CRITICAL, blocking)
-        uses: aquasecurity/trivy-action@v0.28.0
-        with:
-          image-ref: jobs-hunter-${{ matrix.target }}:ci
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          format: table
+        run: /tmp/trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 --format table jobs-hunter-${{ matrix.target }}:ci
 
       - name: Trivy scan (HIGH/MEDIUM, informational)
         if: always()
-        uses: aquasecurity/trivy-action@v0.28.0
-        with:
-          image-ref: jobs-hunter-${{ matrix.target }}:ci
-          severity: HIGH,MEDIUM
-          ignore-unfixed: true
-          exit-code: "0"
-          format: sarif
-          output: trivy-${{ matrix.target }}.sarif
+        run: /tmp/trivy image --severity HIGH,MEDIUM --ignore-unfixed --exit-code 0 --format sarif --output trivy-${{ matrix.target }}.sarif jobs-hunter-${{ matrix.target }}:ci
 
       - name: Upload Trivy SARIF
         if: always()

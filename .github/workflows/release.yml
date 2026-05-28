@@ -96,15 +96,20 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign attest --yes --predicate sbom.cdx.json --type cyclonedx "${IMAGE}@${DIGEST}"
 
+      - name: Install Trivy
+        env:
+          TRIVY_VERSION: 0.70.0
+        run: |
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          /tmp/trivy --version
+
       - name: Trivy scan published image
-        uses: aquasecurity/trivy-action@v0.28.0
-        with:
-          image-ref: ghcr.io/${{ github.repository }}-${{ matrix.target }}@${{ steps.build.outputs.digest }}
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "0"
-          format: sarif
-          output: trivy-published-${{ matrix.target }}.sarif
+        run: |
+          /tmp/trivy image \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 \
+            --format sarif --output trivy-published-${{ matrix.target }}.sarif \
+            ghcr.io/${{ github.repository }}-${{ matrix.target }}@${{ steps.build.outputs.digest }}
 
       - name: Upload Trivy SARIF
         if: always()
