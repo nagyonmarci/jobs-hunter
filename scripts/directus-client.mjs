@@ -22,12 +22,6 @@ const optional = (name) => {
   return value ? value.replace(/\/$/, "") : "";
 };
 
-const required = (name) => {
-  const value = optional(name);
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  return value;
-};
-
 export async function createDirectusClient() {
   const baseUrl = optional("DIRECTUS_URL") || "http://localhost:8055";
   let token = optional("DIRECTUS_TOKEN");

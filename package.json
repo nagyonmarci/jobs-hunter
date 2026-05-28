@@ -10,9 +10,42 @@
     "search:linkedin:dry": "node scripts/generate-linkedin-searches.mjs --dry-run",
     "import:linkedin": "node scripts/import-linkedin-jobs.mjs",
     "import:linkedin:dry": "node scripts/import-linkedin-jobs.mjs --dry-run",
-    "ingest:jobs": "node scripts/ingest-jobs.mjs data/jobs.sample.json"
+    "ingest:jobs": "node scripts/ingest-jobs.mjs data/jobs.sample.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "release": "semantic-release",
+    "prepare": "husky"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-n": "^17.15.1",
+    "eslint-plugin-promise": "^7.2.1",
+    "eslint-plugin-security": "^3.0.1",
+    "globals": "^15.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
+    "prettier": "^3.4.2",
+    "semantic-release": "^24.2.1",
+    "vitest": "^2.1.8"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }

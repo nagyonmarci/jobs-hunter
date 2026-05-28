@@ -52,15 +52,8 @@
       "5+ years"
     ],
     "minimumScore": 45,
-    "allowedLanguages": [
-      "english",
-      "hungarian",
-      "mixed",
-      "unknown"
-    ],
-    "blockedLanguages": [
-      "other"
-    ],
+    "allowedLanguages": ["english", "hungarian", "mixed", "unknown"],
+    "blockedLanguages": ["other"],
     "hybridLocations": [
       "Hungary",
       "Krakow Metropolitan Area",
@@ -69,13 +62,8 @@
       "Slovakia",
       "Romania"
     ],
-    "remoteLocations": [
-      "European Union"
-    ],
-    "experienceLevels": [
-      "entry",
-      "associate"
-    ],
+    "remoteLocations": ["European Union"],
+    "experienceLevels": ["entry", "associate"],
     "postedWithin": "r604800"
   },
   "source": {
@@ -83,24 +71,16 @@
       "baseUrl": "https://www.linkedin.com/jobs/search/"
     },
     "justjoinit": {
-      "searchUrls": [
-        "https://justjoin.it/job-offers/poland-remote/devops"
-      ]
+      "searchUrls": ["https://justjoin.it/job-offers/poland-remote/devops"]
     },
     "nofluffjobs": {
-      "searchUrls": [
-        "https://nofluffjobs.com/pl/devops/remote"
-      ]
+      "searchUrls": ["https://nofluffjobs.com/pl/devops/remote"]
     },
     "weworkremotely": {
-      "searchUrls": [
-        "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs"
-      ]
+      "searchUrls": ["https://weworkremotely.com/categories/remote-devops-sysadmin-jobs"]
     },
     "eurotoptech": {
-      "searchUrls": [
-        "https://www.eurotoptech.com/jobs/role/devops"
-      ]
+      "searchUrls": ["https://www.eurotoptech.com/jobs/role/devops"]
     }
   }
 }

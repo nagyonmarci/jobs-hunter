@@ -66,15 +66,33 @@ await ensureField("job_leads", "source_id", "string", { required: true, maxLengt
 await ensureField("job_leads", "title", "string", { required: true, maxLength: 255 });
 await ensureField("job_leads", "company", "string", { maxLength: 255 });
 await ensureField("job_leads", "location", "string", { maxLength: 255 });
-await ensureField("job_leads", "workplace", "string", { maxLength: 30, note: "remote, hybrid, onsite" });
-await ensureField("job_leads", "seniority", "string", { maxLength: 30, note: "junior, medior, senior, unknown" });
-await ensureField("job_leads", "language", "string", { maxLength: 50, note: "english, hungarian, mixed, unknown" });
+await ensureField("job_leads", "workplace", "string", {
+  maxLength: 30,
+  note: "remote, hybrid, onsite"
+});
+await ensureField("job_leads", "seniority", "string", {
+  maxLength: 30,
+  note: "junior, medior, senior, unknown"
+});
+await ensureField("job_leads", "language", "string", {
+  maxLength: 50,
+  note: "english, hungarian, mixed, unknown"
+});
 await ensureField("job_leads", "url", "string", { required: true, unique: true, maxLength: 500 });
 await ensureField("job_leads", "apply_url", "string", { maxLength: 500 });
-await ensureField("job_leads", "status", "string", { required: true, maxLength: 30, note: "new, shortlisted, applied, rejected, ignored" });
+await ensureField("job_leads", "status", "string", {
+  required: true,
+  maxLength: 30,
+  note: "new, shortlisted, applied, rejected, ignored"
+});
 await ensureField("job_leads", "score", "integer");
-await ensureField("job_leads", "salary", "string", { maxLength: 255, note: "Public salary or compensation text when available." });
-await ensureField("job_leads", "is_read", "boolean", { note: "Whether the lead was reviewed in the admin UI." });
+await ensureField("job_leads", "salary", "string", {
+  maxLength: 255,
+  note: "Public salary or compensation text when available."
+});
+await ensureField("job_leads", "is_read", "boolean", {
+  note: "Whether the lead was reviewed in the admin UI."
+});
 await ensureField("job_leads", "notes", "text");
 
 await ensureCollection("job_search_runs", "Generated search URLs and run metadata.");

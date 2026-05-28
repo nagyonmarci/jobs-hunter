@@ -1,5 +1,11 @@
 # Job Search Automation with Directus
 
+[![CI](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml)
+[![OSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nagyonmarci/jobs-hunter/badge)](https://securityscorecards.dev/viewer/?uri=github.com/nagyonmarci/jobs-hunter)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
+
 This is a small, dependency-free Node.js starter for tracking DevOps/SRE/Platform job leads in Directus.
 
 It does not scrape LinkedIn behind login. Instead it:
@@ -294,3 +300,94 @@ Statuses to use:
 ## Why this shape
 
 LinkedIn automation that logs in, scrapes pages, or submits applications is brittle and can risk the account. This setup keeps the reliable part automated: search generation, structured tracking, dedupe, and application pipeline state in Directus.
+
+## Development
+
+Install dependencies and the local pre-commit hooks:
+
+```bash
+npm install
+```
+
+Common tasks:
+
+```bash
+npm run lint           # ESLint
+npm run format         # Prettier (write)
+npm run format:check   # Prettier (verify)
+npm test               # Vitest (watch)
+npm run test:run       # Vitest (single run)
+npm run test:coverage  # Vitest + v8 coverage
+```
+
+`lint-staged` runs ESLint and Prettier on staged files via the
+`pre-commit` hook; the `pre-push` hook runs the test suite.
+
+### Docker images
+
+The multi-stage [`Dockerfile`](Dockerfile) builds two named targets:
+
+- `app` — the Node runtime (importer/search scripts), published as
+  `ghcr.io/nagyonmarci/jobs-hunter-app`
+- `admin` — the static admin UI served by nginx, published as
+  `ghcr.io/nagyonmarci/jobs-hunter-admin`
+
+Build either target locally:
+
+```bash
+docker build --target app -t jobs-hunter-app:dev .
+docker run --rm jobs-hunter-app:dev scripts/generate-linkedin-searches.mjs --dry-run
+
+docker build --target admin -t jobs-hunter-admin:dev .
+docker run --rm -p 8080:80 jobs-hunter-admin:dev   # http://localhost:8080/admin.html
+```
+
+## Continuous integration
+
+Every push and pull request runs:
+
+- ESLint, Prettier check, and the LinkedIn search dry-run on Node 20 and 22
+- Vitest with v8 coverage (artifact uploaded for Node 20)
+- gitleaks secret scanning
+- CodeQL and Semgrep static analysis
+- Hadolint (Dockerfile) and Checkov (IaC) scanning
+- A build of both image targets plus a Trivy vulnerability scan
+- dependency review on pull requests
+
+Lint/format/tests, secret scanning, CodeQL, and the image build plus smoke
+test block the build; Semgrep, Hadolint, Checkov, Trivy, and dependency
+review are informational and publish to the **Security → Code scanning** tab.
+A sticky `security-summary` comment reports per-check status on each pull
+request.
+
+OSSF Scorecard runs weekly and on every push to `main`. Dependabot opens
+weekly updates for npm packages, GitHub Actions, and the Dockerfile base
+image.
+
+## Releases
+
+Pushes to `main` publish `latest` and `sha-<short>` images; pushing a
+`vMAJOR.MINOR.PATCH` tag additionally publishes semver-tagged images and
+creates a GitHub release with auto-generated notes. The
+[`release` workflow](.github/workflows/release.yml) builds both targets
+(`app` and `admin`) for `linux/amd64` and `linux/arm64`, attaches SLSA
+provenance and an SBOM, and signs each image with cosign (keyless OIDC).
+
+Verify a published image's signature:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp "https://github.com/nagyonmarci/jobs-hunter/.github/workflows/release.yml@.*" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/nagyonmarci/jobs-hunter-app:latest
+```
+
+## Security
+
+Please follow [SECURITY.md](.github/SECURITY.md) to report
+vulnerabilities privately rather than opening a public issue.
+
+Container images are signed with cosign and ship with an SBOM and SLSA
+provenance; see [Releases](#releases) for verification. The CI security
+gates and recommended branch protection are documented in
+[SECURITY.md](.github/SECURITY.md).

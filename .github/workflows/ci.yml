@@ -1,0 +1,305 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-test:
+    name: Lint, format, test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Generate searches (dry run)
+        run: npm run search:linkedin:dry
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage artifact
+        if: matrix.node == 20
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.18.4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks version
+
+      - name: Scan
+        run: /tmp/gitleaks detect --source . --config .gitleaks.toml --redact --verbose
+
+  codeql:
+    name: CodeQL (javascript)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"
+
+  sast-semgrep:
+    name: SAST (semgrep)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install semgrep
+        run: pipx install semgrep
+
+      - name: Scan
+        run: |
+          semgrep scan \
+            --config p/ci \
+            --config p/javascript \
+            --config p/owasp-top-ten \
+            --sarif --output semgrep.sarif
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  dockerfile-lint:
+    name: Dockerfile lint (hadolint)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          format: sarif
+          output-file: hadolint.sarif
+          no-fail: true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint
+
+  iac-checkov:
+    name: IaC scan (checkov)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install checkov
+        run: pipx install checkov
+
+      - name: Scan
+        continue-on-error: true
+        run: |
+          checkov --directory . \
+            --framework dockerfile \
+            --soft-fail \
+            --output cli --output sarif \
+            --output-file-path console,checkov-results
+
+      - name: Upload SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results/results.sarif
+          category: checkov
+
+  image-scan:
+    name: Image build & scan (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [app, admin]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (${{ matrix.target }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          push: false
+          load: true
+          tags: jobs-hunter-${{ matrix.target }}:ci
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+
+      - name: Smoke test (app)
+        if: matrix.target == 'app'
+        run: docker run --rm jobs-hunter-app:ci scripts/generate-linkedin-searches.mjs --dry-run
+
+      - name: Install Trivy
+        env:
+          TRIVY_VERSION: 0.70.0
+        run: |
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          /tmp/trivy --version
+
+      - name: Trivy scan (informational)
+        run: |
+          /tmp/trivy image --severity CRITICAL,HIGH,MEDIUM --ignore-unfixed --exit-code 0 --format table jobs-hunter-${{ matrix.target }}:ci
+          /tmp/trivy image --severity CRITICAL,HIGH,MEDIUM --ignore-unfixed --exit-code 0 --format sarif --output trivy-${{ matrix.target }}.sarif jobs-hunter-${{ matrix.target }}:ci
+
+      - name: Upload Trivy SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.target }}.sarif
+          category: trivy-${{ matrix.target }}
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Review dependencies
+        uses: actions/dependency-review-action@v4
+        continue-on-error: true
+        with:
+          fail-on-severity: critical
+          warn-only: true
+
+  security-summary:
+    name: Security summary
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'pull_request'
+    needs:
+      - lint-test
+      - gitleaks
+      - codeql
+      - sast-semgrep
+      - dockerfile-lint
+      - iac-checkov
+      - image-scan
+      - dependency-review
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Post sticky summary
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: security-summary
+          message: |
+            ## Security & CI summary
+
+            | Check | Result |
+            | --- | --- |
+            | Lint / format / test | ${{ needs.lint-test.result }} |
+            | Secret scan (gitleaks) | ${{ needs.gitleaks.result }} |
+            | CodeQL | ${{ needs.codeql.result }} |
+            | SAST (semgrep) | ${{ needs.sast-semgrep.result }} |
+            | Dockerfile lint (hadolint) | ${{ needs.dockerfile-lint.result }} |
+            | IaC scan (checkov) | ${{ needs.iac-checkov.result }} |
+            | Image build & scan (trivy) | ${{ needs.image-scan.result }} |
+            | Dependency review | ${{ needs.dependency-review.result }} |
+
+            Blocking gates: lint/format/test, gitleaks, CodeQL, and the image build + smoke test.
+            Semgrep, Hadolint, Checkov, Trivy, and dependency review are informational — see the **Security → Code scanning** tab.
+
+            Run logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
