@@ -124,4 +124,4 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Smoke test inside container
-        run: docker run --rm jobs-hunter:ci node scripts/generate-linkedin-searches.mjs --dry-run
+        run: docker run --rm jobs-hunter:ci scripts/generate-linkedin-searches.mjs --dry-run
