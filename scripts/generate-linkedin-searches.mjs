@@ -9,7 +9,10 @@ const directus = dryRun ? null : await createDirectusClient();
 const rows = [];
 
 for (const keyword of config.filters.keywords) {
-  const query = [keyword, ...(config.filters.excludeKeywords || []).map((term) => `NOT ${term}`)].join(" ");
+  const query = [
+    keyword,
+    ...(config.filters.excludeKeywords || []).map((term) => `NOT ${term}`)
+  ].join(" ");
   for (const location of config.filters.hybridLocations) {
     rows.push({
       source: "linkedin",
@@ -42,8 +45,10 @@ if (!dryRun) {
   }
 }
 
-console.log(dryRun
-  ? `Generated ${rows.length} LinkedIn search URLs. Dry run: not stored in Directus.`
-  : `Generated and stored ${rows.length} LinkedIn search URLs.`
+console.log(
+  dryRun
+    ? `Generated ${rows.length} LinkedIn search URLs. Dry run: not stored in Directus.`
+    : `Generated and stored ${rows.length} LinkedIn search URLs.`
 );
-for (const row of rows) console.log(`${row.workplace.padEnd(6)} ${row.location.padEnd(28)} ${row.query} ${row.url}`);
+for (const row of rows)
+  console.log(`${row.workplace.padEnd(6)} ${row.location.padEnd(28)} ${row.query} ${row.url}`);
