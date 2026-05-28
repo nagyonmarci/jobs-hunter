@@ -40,7 +40,7 @@ docker compose up -d
 Services:
 
 - Directus: `http://localhost:8055`
-- Admin UI: `http://localhost:4173/admin.html`
+- Admin UI behind OAuth: `http://localhost:4173/admin.html`
 - job importer API: `http://localhost:4180`
 - Postgres: internal Docker network only
 
@@ -50,6 +50,44 @@ Directus admin login comes from:
 DIRECTUS_EMAIL
 DIRECTUS_PASSWORD
 ```
+
+## OAuth gate
+
+The admin UI is served behind `oauth2-proxy`. In Docker Compose, the public `4173` port belongs to the OAuth proxy, while the nginx admin service is only reachable inside the Docker network.
+
+Create an OAuth application at your provider and register this callback URL for local use:
+
+```text
+http://localhost:4173/oauth2/callback
+```
+
+Configure `.env`:
+
+```bash
+OAUTH2_PROXY_PROVIDER=github
+OAUTH2_PROXY_CLIENT_ID=your-client-id
+OAUTH2_PROXY_CLIENT_SECRET=your-client-secret
+OAUTH2_PROXY_COOKIE_SECRET=generated-cookie-secret
+OAUTH2_PROXY_REDIRECT_URL=http://localhost:4173/oauth2/callback
+OAUTH2_PROXY_EMAIL_DOMAINS=*
+```
+
+Generate the cookie secret:
+
+```bash
+openssl rand -base64 32
+```
+
+For Google or another OpenID Connect provider, use:
+
+```bash
+OAUTH2_PROXY_PROVIDER=oidc
+OAUTH2_PROXY_OIDC_ISSUER_URL=https://accounts.google.com
+```
+
+For production, set `OAUTH2_PROXY_REDIRECT_URL` to your public HTTPS callback URL and `OAUTH2_PROXY_COOKIE_SECURE=true`.
+
+Directus (`8055`) and the importer API (`4180`) are still exposed for local development. If you publish this outside your machine, put those services behind the same reverse proxy or remove their host port mappings.
 
 ## Directus collections
 
@@ -88,7 +126,7 @@ The admin UI lets you:
 - edit keywords, hybrid locations, remote locations, seniority, and posted-within window,
 - generate LinkedIn search URLs,
 - save generated search runs into Directus,
-- import concrete LinkedIn jobs from saved search runs,
+- import concrete jobs from selected public sources,
 - manually add reviewed job leads,
 - review job leads with search, per-field filters, salary filtering, sorting, and read/unread marking.
 
@@ -116,6 +154,27 @@ If you create a separate non-admin Directus user/token, give its role or policy:
 - field access for all fields in both collections
 
 The `Test` button checks actual collection read access. It does not use `/server/ping`, because that can give misleading results for restricted tokens.
+
+## Screenshots
+
+### Search Setup
+
+![Search setup](docs/screenshots/admin-setup.png)
+
+### Job Leads
+
+![Job leads list](docs/screenshots/job-leads-list.png)
+
+### Salary Filter
+
+![Salary filter](docs/screenshots/job-leads-salary-filter.png)
+
+To refresh these screenshots locally, start a Chrome instance with remote debugging and run the capture script:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --headless=new --remote-debugging-port=9223 --user-data-dir=/tmp/jobs-hunter-chrome --window-size=1440,1000 about:blank
+node scripts/capture-readme-screenshots.mjs
+```
 
 ## Local static admin fallback
 
@@ -165,9 +224,9 @@ To test the search strategy without Directus:
 npm run search:linkedin:dry
 ```
 
-## Import LinkedIn job leads
+## Import Job Leads
 
-After saving search runs, open the admin UI and click **Import jobs** in the **Import LinkedIn Jobs** panel.
+After saving search runs, open the admin UI and click **Import jobs** in the **Import Jobs** panel.
 
 The importer:
 
