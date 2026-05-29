@@ -59,6 +59,15 @@ repository owner in the GitHub UI):
 - `Image build & scan (admin)`
 - `Dependency review`
 
+Recommended review requirements for branch protection on `main`:
+
+- Require a pull request before merging.
+- Require at least **1 approving human review** before merging.
+- Require review from Code Owners (`.github/CODEOWNERS`).
+- Dismiss stale pull request approvals when new commits are pushed.
+- Require conversation resolution before merging.
+- Do not allow bypassing these settings; include administrators where possible.
+
 Published container images are built multi-arch, get SLSA provenance and an
 SBOM, and are signed with cosign keyless (`.github/workflows/release.yml`).
 
