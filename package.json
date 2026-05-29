@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "provision:directus": "node scripts/provision-directus.mjs",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "provision:directus": "node --import tsx/esm scripts/provision-directus.ts",
     "admin": "python3 -m http.server 4173 --directory public",
-    "search:linkedin": "node scripts/generate-linkedin-searches.mjs",
-    "search:linkedin:dry": "node scripts/generate-linkedin-searches.mjs --dry-run",
-    "import:linkedin": "node scripts/import-linkedin-jobs.mjs",
-    "import:linkedin:dry": "node scripts/import-linkedin-jobs.mjs --dry-run",
-    "ingest:jobs": "node scripts/ingest-jobs.mjs data/jobs.sample.json",
+    "search:linkedin": "node --import tsx/esm scripts/generate-linkedin-searches.ts",
+    "search:linkedin:dry": "node --import tsx/esm scripts/generate-linkedin-searches.ts --dry-run",
+    "import:linkedin": "node --import tsx/esm scripts/linkedin-importer.ts",
+    "import:linkedin:dry": "node --import tsx/esm scripts/linkedin-importer.ts --dry-run",
+    "ingest:jobs": "node --import tsx/esm scripts/ingest-jobs.ts data/jobs.sample.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -26,6 +28,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@types/node": "^25.9.1",
+    "@typescript-eslint/eslint-plugin": "^8.60.0",
+    "@typescript-eslint/parser": "^8.60.0",
     "@vitest/coverage-v8": "^2.1.8",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
@@ -37,10 +42,12 @@
     "lint-staged": "^15.2.11",
     "prettier": "^3.4.2",
     "semantic-release": "^24.2.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
     "vitest": "^2.1.8"
   },
   "lint-staged": {
-    "*.{js,mjs,cjs}": [
+    "*.{js,mjs,cjs,ts}": [
       "eslint --fix",
       "prettier --write"
     ],

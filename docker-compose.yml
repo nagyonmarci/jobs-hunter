@@ -82,12 +82,13 @@ services:
       OAUTH2_PROXY_OIDC_ISSUER_URL: ${OAUTH2_PROXY_OIDC_ISSUER_URL:-}
 
   importer:
-    image: directus/directus:11
+    build:
+      context: .
+      target: app
+    image: jobs-hunter-app:dev
     container_name: jobsearch-importer
     restart: unless-stopped
-    working_dir: /app
-    entrypoint: ["node"]
-    command: ["scripts/import-server.mjs"]
+    command: ["scripts/import-server.js"]
     ports:
       - "4180:4180"
     depends_on:
@@ -98,16 +99,15 @@ services:
       DIRECTUS_PASSWORD: ${DIRECTUS_PASSWORD:-change-me-please}
       DIRECTUS_TOKEN: ${DIRECTUS_TOKEN:-}
       IMPORT_SERVER_PORT: 4180
-    volumes:
-      - ./:/app:ro
 
   directus-tools:
-    image: directus/directus:11
+    build:
+      context: .
+      target: app
+    image: jobs-hunter-app:dev
     profiles:
       - tools
-    working_dir: /app
-    entrypoint: ["node"]
-    command: ["scripts/provision-directus.mjs"]
+    command: ["scripts/provision-directus.js"]
     depends_on:
       - directus
     environment:
@@ -115,8 +115,6 @@ services:
       DIRECTUS_EMAIL: ${DIRECTUS_EMAIL:-admin@example.com}
       DIRECTUS_PASSWORD: ${DIRECTUS_PASSWORD:-change-me-please}
       DIRECTUS_TOKEN: ${DIRECTUS_TOKEN:-}
-    volumes:
-      - ./:/app:ro
 
 volumes:
   postgres_data:
