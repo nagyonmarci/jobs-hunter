@@ -6,12 +6,12 @@ interface SearchParams {
   workplace: "remote" | "hybrid";
 }
 
-const experienceMap: Record<string, string> = {
-  internship: "1",
-  entry: "2",
-  associate: "3",
-  "mid-senior": "4"
-};
+const experienceMap = new Map([
+  ["internship", "1"],
+  ["entry", "2"],
+  ["associate", "3"],
+  ["mid-senior", "4"]
+]);
 
 export function buildLinkedInSearchUrl(
   { keyword, location, workplace }: SearchParams,
@@ -25,7 +25,7 @@ export function buildLinkedInSearchUrl(
     f_WT: workplace === "remote" ? "2" : "3",
     f_TPR: config.filters.postedWithin || "",
     f_E: (config.filters.experienceLevels || [])
-      .map((level) => experienceMap[level])
+      .map((level) => experienceMap.get(level))
       .filter(Boolean)
       .join(",")
   });
