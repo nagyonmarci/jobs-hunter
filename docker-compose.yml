@@ -16,7 +16,7 @@ services:
       retries: 20
 
   directus:
-    image: directus/directus:11
+    image: directus/directus:12
     container_name: jobsearch-directus
     restart: unless-stopped
     ports:

@@ -28,6 +28,8 @@ export async function importLinkedInJobs({
     salaryUpdated: 0,
     skippedExisting: 0,
     skippedFiltered: 0,
+    markedExpired: 0,
+    skippedExpired: 0,
     filterReasons: {},
     failedRuns: 0,
     dryRun,
@@ -70,6 +72,13 @@ export async function importLinkedInJobs({
 
         const existing = dryRun ? null : await findExistingByUrl(client, enrichedJob.url);
         if (existing) {
+          if (enrichedJob.no_longer_accepting && !existing.is_expired) {
+            await client.request(`/items/job_leads/${encodeURIComponent(existing.id)}`, {
+              method: "PATCH",
+              body: JSON.stringify({ is_expired: true })
+            });
+            summary.markedExpired += 1;
+          }
           if (!existing.salary && enrichedJob.salary) {
             await client.request(`/items/job_leads/${encodeURIComponent(existing.id)}`, {
               method: "PATCH",
@@ -81,10 +90,16 @@ export async function importLinkedInJobs({
           continue;
         }
 
+        if (enrichedJob.no_longer_accepting) {
+          summary.skippedExpired += 1;
+          continue;
+        }
+
         if (!dryRun) {
+          const { no_longer_accepting: _, ...jobPayload } = enrichedJob;
           await client.request("/items/job_leads", {
             method: "POST",
-            body: JSON.stringify(enrichedJob)
+            body: JSON.stringify(jobPayload)
           });
         }
         summary.created += 1;
@@ -237,7 +252,8 @@ export async function enrichLinkedInJob(job) {
     title,
     company: company || job.company || null,
     language,
-    notes: description ? description.slice(0, 600) : job.notes
+    notes: description ? description.slice(0, 600) : job.notes,
+    no_longer_accepting: html.includes("No longer accepting applications")
   };
 }
 

@@ -2,7 +2,7 @@ import { createDirectusClient } from "./directus-client.mjs";
 
 const directus = await createDirectusClient();
 
-async function ensureCollection(collection, note) {
+async function ensureCollection(collection, note, options = {}) {
   try {
     await directus.request(`/collections/${collection}`);
     console.log(`exists collection ${collection}`);
@@ -13,7 +13,7 @@ async function ensureCollection(collection, note) {
         collection,
         meta: {
           note,
-          singleton: false,
+          singleton: Boolean(options.singleton),
           hidden: false
         },
         schema: {}
@@ -93,6 +93,10 @@ await ensureField("job_leads", "salary", "string", {
 await ensureField("job_leads", "is_read", "boolean", {
   note: "Whether the lead was reviewed in the admin UI."
 });
+await ensureField("job_leads", "date_created", "dateTime", {
+  special: ["date-created"]
+});
+await ensureField("job_leads", "is_expired", "boolean");
 await ensureField("job_leads", "notes", "text");
 
 await ensureCollection("job_search_runs", "Generated search URLs and run metadata.");
@@ -102,5 +106,24 @@ await ensureField("job_search_runs", "location", "string", { required: true, max
 await ensureField("job_search_runs", "workplace", "string", { required: true, maxLength: 30 });
 await ensureField("job_search_runs", "url", "string", { required: true, maxLength: 800 });
 await ensureField("job_search_runs", "generated_at", "dateTime");
+
+await ensureField("job_leads", "description", "text", {
+  note: "Full text of the job description for ATS optimization."
+});
+await ensureField("job_leads", "generated_cv", "text", {
+  note: "Generated markdown/text CV for this lead."
+});
+await ensureField("job_leads", "generated_cv_pdf", "uuid", {
+  note: "Generated PDF CV file for this lead (reference to directus_files)."
+});
+
+await ensureCollection("base_cv", "Master CV for generating optimized resumes.", { singleton: true });
+await ensureField("base_cv", "content", "text", { note: "The full content of your master CV in markdown." });
+
+await ensureCollection("app_settings", "Application settings and API keys.", { singleton: true });
+await ensureField("app_settings", "preferred_llm", "string", { note: "openai, anthropic, or gemini" });
+await ensureField("app_settings", "openai_api_key", "string");
+await ensureField("app_settings", "anthropic_api_key", "string");
+await ensureField("app_settings", "gemini_api_key", "string");
 
 console.log("Directus provisioning finished.");
