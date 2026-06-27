@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { createDirectusClient } from "./directus-client.mjs";
+import { createDirectusClient, findExistingByUrl } from "./directus-client.mjs";
 
 const inputPath = process.argv[2];
 if (!inputPath) {
@@ -12,16 +12,6 @@ const jobs = JSON.parse(await fs.readFile(inputPath, "utf8"));
 function required(value, name) {
   if (!value) throw new Error(`Job is missing required field: ${name}`);
   return value;
-}
-
-async function findExistingByUrl(url) {
-  const params = new URLSearchParams({
-    "filter[url][_eq]": url,
-    limit: "1",
-    fields: "id,url"
-  });
-  const response = await directus.request(`/items/job_leads?${params.toString()}`);
-  return response.data?.[0] || null;
 }
 
 let created = 0;
@@ -46,7 +36,7 @@ for (const job of jobs) {
     notes: job.notes || null
   };
 
-  const existing = await findExistingByUrl(payload.url);
+  const existing = await findExistingByUrl(directus, payload.url);
   if (existing) {
     skipped += 1;
     continue;

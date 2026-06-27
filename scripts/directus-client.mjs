@@ -1,22 +1,3 @@
-import fs from "node:fs";
-
-function loadDotEnv() {
-  if (!fs.existsSync(".env")) return;
-  const lines = fs.readFileSync(".env", "utf8").split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const index = trimmed.indexOf("=");
-    if (index === -1) continue;
-    const key = trimmed.slice(0, index).trim();
-    const rawValue = trimmed.slice(index + 1).trim();
-    const value = rawValue.replace(/^["']|["']$/g, "");
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
-
-loadDotEnv();
-
 const optional = (name) => {
   const value = process.env[name];
   return value ? value.replace(/\/$/, "") : "";
@@ -64,4 +45,10 @@ export async function createDirectusClient() {
   }
 
   return { request };
+}
+
+export async function findExistingByUrl(directus, url, fields = "id,url") {
+  const params = new URLSearchParams({ "filter[url][_eq]": url, limit: "1", fields });
+  const { data } = await directus.request(`/items/job_leads?${params.toString()}`);
+  return data?.[0] || null;
 }

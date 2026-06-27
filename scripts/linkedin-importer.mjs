@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { createDirectusClient } from "./directus-client.mjs";
+import { createDirectusClient, findExistingByUrl } from "./directus-client.mjs";
 
 const defaultConfigPath = "config/searches.json";
 
@@ -42,7 +42,8 @@ export async function importLinkedInJobs({
       const html = await fetchSourceHtml(run.url);
       summary.fetched += 1;
 
-      const jobs = extractJobsForRun(html, run, config).slice(0, maxJobsPerRun);
+      const allJobs = extractJobsForRun(html, run, config);
+      const jobs = maxJobsPerRun > 0 ? allJobs.slice(0, maxJobsPerRun) : allJobs;
       summary.parsed += jobs.length;
 
       for (const job of jobs) {
@@ -70,7 +71,7 @@ export async function importLinkedInJobs({
           continue;
         }
 
-        const existing = dryRun ? null : await findExistingByUrl(client, enrichedJob.url);
+        const existing = dryRun ? null : await findExistingByUrl(client, enrichedJob.url, "id,url,salary");
         if (existing) {
           if (enrichedJob.no_longer_accepting && !existing.is_expired) {
             await client.request(`/items/job_leads/${encodeURIComponent(existing.id)}`, {
@@ -202,10 +203,6 @@ function sourceUrls(config, source, fallback) {
   return config.source?.[source]?.searchUrls?.length ? config.source[source].searchUrls : fallback;
 }
 
-export async function fetchLinkedInHtml(url) {
-  return fetchSourceHtml(url);
-}
-
 export async function fetchSourceHtml(url) {
   const response = await fetch(url, {
     headers: {
@@ -230,7 +227,7 @@ async function enrichJob(job) {
 }
 
 export async function enrichLinkedInJob(job) {
-  const html = await fetchLinkedInHtml(job.url);
+  const html = await fetchSourceHtml(job.url);
   const title =
     firstText(html, [
       /class="[^"]*top-card-layout__title[^"]*"[^>]*>([\s\S]*?)<\/h1>/i,
@@ -927,12 +924,3 @@ function normalize(value) {
     .trim();
 }
 
-async function findExistingByUrl(directus, url) {
-  const params = new URLSearchParams({
-    "filter[url][_eq]": url,
-    limit: "1",
-    fields: "id,url,salary"
-  });
-  const response = await directus.request(`/items/job_leads?${params.toString()}`);
-  return response.data?.[0] || null;
-}

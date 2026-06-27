@@ -4,8 +4,6 @@ import puppeteer from "puppeteer";
 import { mdToPdf } from "md-to-pdf";
 import { createDirectusClient } from "./directus-client.mjs";
 
-const directus = await createDirectusClient();
-
 async function takeScreenshot(url, outputPath) {
   const browser = await puppeteer.launch({
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
@@ -74,6 +72,7 @@ async function callLLM(prompt, settings) {
 }
 
 export async function processCvGeneration(jobId) {
+  const directus = await createDirectusClient();
   // 1. Fetch job lead
   const { data: job } = await directus.request(`/items/job_leads/${jobId}`);
   if (!job) throw new Error("Job not found");
@@ -100,7 +99,7 @@ export async function processCvGeneration(jobId) {
     });
     
     // Cleanup screenshot
-    try { await fs.unlink(screenshotPath); } catch (e) {}
+    try { await fs.unlink(screenshotPath); } catch { /* swallow */ }
   }
 
   // 4. Fetch Base CV
@@ -125,12 +124,8 @@ ${description}
 
   const generatedMarkdown = await callLLM(prompt, settings);
 
-  // 6. Convert Markdown to PDF
-  const pdfPath = path.resolve(`data/cv-${jobId}.pdf`);
+  // 6. Convert Markdown to PDF and upload
   const pdfBuffer = await mdToPdf({ content: generatedMarkdown }).catch(console.error);
-  if (pdfBuffer) {
-    await fs.writeFile(pdfPath, pdfBuffer.content);
-  }
 
   // 7. Upload PDF to Directus Files
   let fileId = null;
@@ -153,8 +148,6 @@ ${description}
       fileId = uploadData.data.id;
     }
     
-    // Cleanup PDF
-    try { await fs.unlink(pdfPath); } catch (e) {}
   }
 
   // 8. Update Job Lead with Generated CV
