@@ -220,9 +220,18 @@ export async function fetchSourceHtml(url) {
 
 async function enrichJob(job) {
   if (job.source === "linkedin") return enrichLinkedInJob(job);
+  if (job.source === "justjoinit") return enrichJustJoinItJob(job);
   return {
     ...job,
     language: job.language || detectLanguage(`${job.title} ${job.notes || ""}`)
+  };
+}
+
+async function enrichJustJoinItJob(job) {
+  const html = await fetchSourceHtml(job.url);
+  return {
+    ...job,
+    no_longer_accepting: html.includes("Offer expired")
   };
 }
 
