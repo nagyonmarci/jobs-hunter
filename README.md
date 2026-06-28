@@ -194,6 +194,8 @@ http://localhost:4173/admin.html
 
 If Directus is not configured for browser requests, enable CORS in your Directus deployment for the admin UI origin.
 
+The importer API reads `cors_origin` from the `app_settings` Directus collection at startup to set its allowed origin header. If the field is absent or empty, it falls back to `http://localhost:4173`.
+
 ## Generate LinkedIn searches
 
 Edit [config/searches.json](config/searches.json).
@@ -237,7 +239,7 @@ The importer:
 - parses visible job cards into `job_leads`,
 - stores public salary or compensation text when the source exposes it,
 - backfills salary on existing leads when the URL already exists and the salary field is still empty,
-- detects LinkedIn "No longer accepting applications" on existing leads and marks them `is_expired`,
+- detects LinkedIn "No longer accepting applications" and Just Join IT "Offer expired" on enriched leads and marks them `is_expired`,
 - skips new LinkedIn leads already marked "No longer accepting applications" without saving them,
 - skips existing leads by URL,
 - filters obvious senior/lead/principal/staff roles,
