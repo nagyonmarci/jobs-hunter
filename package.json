@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "provision:directus": "node --import tsx/esm scripts/provision-directus.ts",
     "admin": "python3 -m http.server 4173 --directory public",
@@ -24,7 +24,7 @@
     "prepare": "husky"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
