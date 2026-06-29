@@ -10,7 +10,7 @@ COPY scripts ./scripts
 RUN npx tsc
 
 # Static admin UI served by nginx (build target: admin)
-FROM nginx:1.27-alpine AS admin
+FROM nginx:1.31-alpine AS admin
 COPY public /usr/share/nginx/html
 COPY nginx/admin.conf /etc/nginx/conf.d/default.conf
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
