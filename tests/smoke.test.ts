@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { buildLinkedInSearchUrl } from "../scripts/linkedin-url.mjs";
+import { buildLinkedInSearchUrl } from "../scripts/linkedin-url.js";
+import type { Config } from "../scripts/types.js";
 
-const config = {
+const config: Config = {
   source: { linkedin: { baseUrl: "https://www.linkedin.com/jobs/search" } },
   filters: {
+    keywords: ["backend engineer"],
     excludeKeywords: ["senior", "lead"],
     postedWithin: "r604800",
     experienceLevels: ["entry", "associate", "mid-senior"]
@@ -34,9 +36,9 @@ describe("buildLinkedInSearchUrl", () => {
   });
 
   it("tolerates missing excludeKeywords", () => {
-    const minimal = {
+    const minimal: Config = {
       source: { linkedin: { baseUrl: "https://example.test/jobs" } },
-      filters: { postedWithin: "r86400", experienceLevels: ["entry"] }
+      filters: { keywords: ["qa"], postedWithin: "r86400", experienceLevels: ["entry"] }
     };
     const url = buildLinkedInSearchUrl(
       { keyword: "qa", location: "Remote", workplace: "remote" },

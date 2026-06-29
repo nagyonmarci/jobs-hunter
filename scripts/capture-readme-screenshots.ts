@@ -1,5 +1,24 @@
 import fs from "node:fs/promises";
 
+interface ChromeTarget {
+  webSocketDebuggerUrl: string;
+}
+
+interface CdpMessage {
+  id?: number;
+  result?: unknown;
+  error?: unknown;
+}
+
+interface CdpResult<T = Record<string, unknown>> {
+  result: T;
+}
+
+interface PendingCommand {
+  resolve: (value: unknown) => void;
+  reject: (reason?: unknown) => void;
+}
+
 const chromePort = process.env.CHROME_DEBUG_PORT || "9223";
 const baseUrl = process.env.SCREENSHOT_BASE_URL || "http://localhost:4173/admin.html";
 const directusUrl = process.env.DIRECTUS_URL || "http://localhost:8055";
@@ -9,46 +28,48 @@ const outputDir = "docs/screenshots";
 
 await fs.mkdir(outputDir, { recursive: true });
 
-const target = await (
+const target = (await (
   await fetch(`http://127.0.0.1:${chromePort}/json/new?${encodeURIComponent(baseUrl)}`, {
     method: "PUT"
   })
-).json();
+).json()) as ChromeTarget;
 
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 let id = 0;
-const pending = new Map();
+const pending = new Map<number, PendingCommand>();
 
 ws.addEventListener("message", (event) => {
-  const message = JSON.parse(event.data);
+  const message = JSON.parse(String(event.data)) as CdpMessage;
   if (!message.id || !pending.has(message.id)) return;
-  const { resolve, reject } = pending.get(message.id);
+  const command = pending.get(message.id);
+  if (!command) return;
+  const { resolve, reject } = command;
   pending.delete(message.id);
   if (message.error) reject(new Error(JSON.stringify(message.error)));
   else resolve(message.result);
 });
 
-await new Promise((resolve) => ws.addEventListener("open", resolve, { once: true }));
+await new Promise<void>((resolve) => ws.addEventListener("open", () => resolve(), { once: true }));
 
-function command(method, params = {}) {
+function command(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
   const commandId = ++id;
   ws.send(JSON.stringify({ id: commandId, method, params }));
   return new Promise((resolve, reject) => pending.set(commandId, { resolve, reject }));
 }
 
-function wait(ms) {
+function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function evaluate(expression) {
+function evaluate(expression: string): Promise<CdpResult<{ value?: unknown }>> {
   return command("Runtime.evaluate", {
     expression,
     awaitPromise: true,
     returnByValue: true
-  });
+  }) as Promise<CdpResult<{ value?: unknown }>>;
 }
 
-async function waitForText(text, timeout = 15000) {
+async function waitForText(text: string, timeout = 15000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeout) {
     const result = await evaluate("document.body && document.body.innerText || ''");
@@ -58,11 +79,11 @@ async function waitForText(text, timeout = 15000) {
   throw new Error(`Timed out waiting for "${text}"`);
 }
 
-async function screenshot(path) {
-  const result = await command("Page.captureScreenshot", {
+async function screenshot(path: string): Promise<void> {
+  const result = (await command("Page.captureScreenshot", {
     format: "png",
     captureBeyondViewport: false
-  });
+  })) as { data: string };
   await fs.writeFile(path, Buffer.from(result.data, "base64"));
 }
 

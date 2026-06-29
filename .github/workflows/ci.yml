@@ -222,7 +222,7 @@ jobs:
 
       - name: Smoke test (app)
         if: matrix.target == 'app'
-        run: docker run --rm jobs-hunter-app:ci scripts/generate-linkedin-searches.mjs --dry-run
+        run: docker run --rm jobs-hunter-app:ci scripts/generate-linkedin-searches.js --dry-run
 
       - name: Install Trivy
         env:

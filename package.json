@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "provision:directus": "node scripts/provision-directus.mjs",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "provision:directus": "node --import tsx/esm scripts/provision-directus.ts",
     "admin": "python3 -m http.server 4173 --directory public",
-    "search:linkedin": "node scripts/generate-linkedin-searches.mjs",
-    "search:linkedin:dry": "node scripts/generate-linkedin-searches.mjs --dry-run",
-    "import:linkedin": "node scripts/import-linkedin-jobs.mjs",
-    "import:linkedin:dry": "node scripts/import-linkedin-jobs.mjs --dry-run",
-    "ingest:jobs": "node scripts/ingest-jobs.mjs data/jobs.sample.json",
+    "search:linkedin": "node --import tsx/esm scripts/generate-linkedin-searches.ts",
+    "search:linkedin:dry": "node --import tsx/esm scripts/generate-linkedin-searches.ts --dry-run",
+    "import:linkedin": "node --import tsx/esm scripts/linkedin-importer.ts",
+    "import:linkedin:dry": "node --import tsx/esm scripts/linkedin-importer.ts --dry-run",
+    "ingest:jobs": "node --import tsx/esm scripts/ingest-jobs.ts data/jobs.sample.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -22,25 +24,31 @@
     "prepare": "husky"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^25.9.1",
+    "@typescript-eslint/eslint-plugin": "^8.60.0",
+    "@typescript-eslint/parser": "^8.60.0",
     "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-n": "^18.1.0",
     "eslint-plugin-promise": "^7.2.1",
     "eslint-plugin-security": "^4.0.1",
+    "fast-check": "^4.8.0",
     "globals": "^17.6.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.7",
     "prettier": "^3.8.4",
     "semantic-release": "^25.0.5",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   },
   "lint-staged": {
-    "*.{js,mjs,cjs}": [
+    "*.{js,mjs,cjs,ts}": [
       "eslint --fix",
       "prettier --write"
     ],

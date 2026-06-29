@@ -1,26 +1,38 @@
 import fs from "node:fs/promises";
-import { createDirectusClient } from "./directus-client.mjs";
+import { createDirectusClient } from "./directus-client.js";
+import type { Job } from "./types.js";
+
+interface DirectusListResponse<T> {
+  data?: T[];
+}
+
+interface ExistingJob {
+  id: string;
+  url: string;
+}
 
 const inputPath = process.argv[2];
 if (!inputPath) {
-  throw new Error("Usage: node scripts/ingest-jobs.mjs data/jobs.json");
+  throw new Error("Usage: node --import tsx/esm scripts/ingest-jobs.ts data/jobs.json");
 }
 
 const directus = await createDirectusClient();
-const jobs = JSON.parse(await fs.readFile(inputPath, "utf8"));
+const jobs = JSON.parse(await fs.readFile(inputPath, "utf8")) as Job[];
 
-function required(value, name) {
+function required(value: string | null | undefined, name: string): string {
   if (!value) throw new Error(`Job is missing required field: ${name}`);
   return value;
 }
 
-async function findExistingByUrl(url) {
+async function findExistingByUrl(url: string): Promise<ExistingJob | null> {
   const params = new URLSearchParams({
     "filter[url][_eq]": url,
     limit: "1",
     fields: "id,url"
   });
-  const response = await directus.request(`/items/job_leads?${params.toString()}`);
+  const response = (await directus.request(
+    `/items/job_leads?${params.toString()}`
+  )) as DirectusListResponse<ExistingJob>;
   return response.data?.[0] || null;
 }
 

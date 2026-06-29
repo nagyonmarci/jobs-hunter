@@ -1,8 +1,18 @@
-import { createDirectusClient } from "./directus-client.mjs";
+import { createDirectusClient } from "./directus-client.js";
+
+interface FieldDefinitionOptions {
+  interface?: string;
+  special?: string;
+  required?: boolean;
+  note?: string;
+  options?: Record<string, unknown>;
+  unique?: boolean;
+  maxLength?: number;
+}
 
 const directus = await createDirectusClient();
 
-async function ensureCollection(collection, note) {
+async function ensureCollection(collection: string, note: string): Promise<void> {
   try {
     await directus.request(`/collections/${collection}`);
     console.log(`exists collection ${collection}`);
@@ -23,7 +33,12 @@ async function ensureCollection(collection, note) {
   }
 }
 
-async function ensureField(collection, field, type, options = {}) {
+async function ensureField(
+  collection: string,
+  field: string,
+  type: string,
+  options: FieldDefinitionOptions = {}
+): Promise<void> {
   const payload = {
     field,
     type,
