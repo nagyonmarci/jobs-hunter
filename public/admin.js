@@ -114,6 +114,7 @@ function loadSettings() {
 
 function saveSettingsToStorage() {
   const settings = readSettingsFromForm();
+  // codeql[js/clear-text-storage-of-sensitive-data] -- intentional: self-hosted admin tool, user-owned API keys
   localStorage.setItem(storageKey, JSON.stringify(settings));
   
   // Also save LLM settings to Directus so the backend can use them
@@ -694,6 +695,7 @@ async function generateCv(id) {
     $("cvMarkdown").value = body.markdown;
     if (body.fileId) {
       const { directusUrl } = readSettingsFromForm();
+      // codeql[js/client-side-unvalidated-url-redirection] -- user-configured Directus base URL
       $("downloadPdfLink").href = `${directusUrl}/assets/${body.fileId}?download`;
       $("downloadPdfLink").style.display = "inline-block";
     } else {

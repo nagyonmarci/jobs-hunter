@@ -9,6 +9,13 @@ COPY tsconfig.json ./
 COPY scripts ./scripts
 RUN npx tsc
 
+# Static admin UI served by nginx (build target: admin)
+FROM nginx:1.31-alpine AS admin
+COPY public /usr/share/nginx/html
+COPY nginx/admin.conf /etc/nginx/conf.d/default.conf
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD wget -qO /dev/null http://127.0.0.1:80/admin.html || exit 1
+
 # Node application runtime (build target: app, also the default target)
 FROM node:20-alpine3.22 AS app
 ENV NODE_ENV=production
