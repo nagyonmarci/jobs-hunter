@@ -749,7 +749,7 @@ function firstText(segment: string, patterns: RegExp[]): string {
 function cleanText(value: string): string {
   return decodeHtml(value)
     .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
-    .replace(/<script\b[\s\S]*?<\/script>/gi, " ") // codeql[js/bad-tag-filter] - text extraction only, not security sanitization
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
     .replace(/<[^>]+>/g, " ") // codeql[js/bad-tag-filter] - text extraction only, not security sanitization
     .replace(/\s+/g, " ")
     .trim();
