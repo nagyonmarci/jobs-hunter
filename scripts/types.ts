@@ -1,9 +1,5 @@
 export type JobSource =
-  | "linkedin"
-  | "justjoinit"
-  | "nofluffjobs"
-  | "weworkremotely"
-  | "eurotoptech";
+  "linkedin" | "justjoinit" | "nofluffjobs" | "weworkremotely" | "eurotoptech";
 export type JobWorkplace = "remote" | "hybrid" | "onsite" | "unknown";
 export type JobSeniority = "junior" | "medior" | "senior" | "unknown";
 export type JobLanguage = "english" | "hungarian" | "mixed" | "other" | "unknown";
