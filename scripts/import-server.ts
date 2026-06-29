@@ -41,7 +41,8 @@ const server = http.createServer(async (request, response) => {
       });
       sendJson(response, 200, summary);
     } catch (error) {
-      sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+      console.error(error instanceof Error ? error.message : String(error));
+      sendJson(response, 500, { error: "Import failed" });
     }
     return;
   }
@@ -70,7 +71,8 @@ const server = http.createServer(async (request, response) => {
       const result = await expireStaleJobs();
       sendJson(response, 200, result);
     } catch (error) {
-      sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+      console.error(error instanceof Error ? error.message : String(error));
+      sendJson(response, 500, { error: "Expire check failed" });
     }
     return;
   }

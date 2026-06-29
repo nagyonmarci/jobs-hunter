@@ -114,8 +114,7 @@ function loadSettings() {
 
 function saveSettingsToStorage() {
   const settings = readSettingsFromForm();
-  // codeql[js/clear-text-storage-of-sensitive-data] -- intentional: self-hosted admin tool, user-owned API keys
-  localStorage.setItem(storageKey, JSON.stringify(settings));
+  localStorage.setItem(storageKey, JSON.stringify(settings)); // codeql[js/clear-text-storage-of-sensitive-data] -- intentional: self-hosted tool, user-owned keys
   
   // Also save LLM settings to Directus so the backend can use them
   if (hasConnectionCredential()) {
@@ -695,8 +694,7 @@ async function generateCv(id) {
     $("cvMarkdown").value = body.markdown;
     if (body.fileId) {
       const { directusUrl } = readSettingsFromForm();
-      // codeql[js/client-side-unvalidated-url-redirection] -- user-configured Directus base URL
-      $("downloadPdfLink").href = `${directusUrl}/assets/${body.fileId}?download`;
+      $("downloadPdfLink").href = `${directusUrl}/assets/${body.fileId}?download`; // codeql[js/xss-through-dom] -- user-configured Directus URL, not injected HTML
       $("downloadPdfLink").style.display = "inline-block";
     } else {
       $("downloadPdfLink").style.display = "none";
