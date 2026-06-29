@@ -10,76 +10,10 @@ const outputDir = "docs/screenshots";
 
 await fs.mkdir(outputDir, { recursive: true });
 
-const settings = {
-  directusUrl,
-  directusToken: "",
-  directusEmail,
-  keywords: [
-    '"DevOps Engineer"',
-    '"Site Reliability Engineer"',
-    "SRE",
-    '"Platform Engineer"',
-    '"Cloud Engineer"',
-    '"Azure DevOps Engineer"',
-    '"Infrastructure Engineer"'
-  ],
-  excludeKeywords: [
-    '"Security Engineer"',
-    '"Cybersecurity"',
-    '"Application Security"',
-    '"Product Security"',
-    '"Security Architect"',
-    '"IT Security"'
-  ],
-  positiveTech: [
-    "Kubernetes",
-    "Docker",
-    "Terraform",
-    "Ansible",
-    "CI/CD",
-    "GitHub Actions",
-    "GitLab CI",
-    "Jenkins",
-    "Azure DevOps",
-    "Linux",
-    "Bash",
-    "Python",
-    "AWS",
-    "Azure",
-    "GCP",
-    "Prometheus",
-    "Grafana",
-    "Helm",
-    "Argo CD"
-  ],
-  negativeSignals: [
-    "senior",
-    "lead",
-    "principal",
-    "staff",
-    "manager",
-    "architect",
-    "security clearance",
-    "10+ years",
-    "8+ years",
-    "7+ years",
-    "5+ years"
-  ],
-  minimumScore: 45,
-  allowedLanguages: ["english", "hungarian", "mixed", "unknown"],
-  blockedLanguages: ["other"],
-  hybridLocations: [
-    "Hungary",
-    "Krakow Metropolitan Area",
-    "Katowice Metropolitan Area",
-    "Wroclaw Metropolitan Area",
-    "Slovakia",
-    "Romania"
-  ],
-  remoteLocations: ["European Union"],
-  experienceLevels: ["entry", "associate"],
-  postedWithin: "r604800"
+const searchConfig = JSON.parse(await fs.readFile("config/searches.json", "utf-8")) as {
+  filters: Record<string, unknown>;
 };
+const settings = { directusUrl, directusToken: "", directusEmail, ...searchConfig.filters };
 
 const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${chromePort}` });
 const page = await browser.newPage();

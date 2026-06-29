@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { createDirectusClient, findExistingByUrl } from "./directus-client.js";
 import type {
   Config,
@@ -9,15 +10,10 @@ import type {
   JobLanguage,
   JobSearchRun,
   JobSeniority,
-  JobSource,
   JobWorkplace
 } from "./types.js";
 
 const defaultConfigPath = "config/searches.json";
-
-interface DirectusListResponse<T> {
-  data?: T[];
-}
 
 interface ExistingJob {
   id: string;
@@ -115,7 +111,9 @@ export async function importLinkedInJobs({
       for (const job of jobs) {
         const initialFilterReason = wantedJobFilterReason(job, config);
         if (initialFilterReason) {
-          addFiltered(summary, initialFilterReason);
+          summary.skippedFiltered += 1;
+          summary.filterReasons[initialFilterReason] =
+            (summary.filterReasons[initialFilterReason] ?? 0) + 1;
           continue;
         }
 
@@ -133,7 +131,9 @@ export async function importLinkedInJobs({
 
         const enrichedFilterReason = enrichedJobFilterReason(enrichedJob, config);
         if (enrichedFilterReason) {
-          addFiltered(summary, enrichedFilterReason);
+          summary.skippedFiltered += 1;
+          summary.filterReasons[enrichedFilterReason] =
+            (summary.filterReasons[enrichedFilterReason] ?? 0) + 1;
           continue;
         }
 
@@ -192,11 +192,6 @@ export async function importLinkedInJobs({
   return summary;
 }
 
-function addFiltered(summary: ImportSummary, reason: string): void {
-  summary.skippedFiltered += 1;
-  summary.filterReasons[reason] = (summary.filterReasons[reason] || 0) + 1;
-}
-
 export async function loadSearchRuns(
   directus: DirectusClient,
   limit: number
@@ -206,9 +201,9 @@ export async function loadSearchRuns(
     limit: String(limit),
     fields: "id,source,query,location,workplace,url,generated_at"
   });
-  const response = (await directus.request(
-    `/items/job_search_runs?${params.toString()}`
-  )) as DirectusListResponse<JobSearchRun>;
+  const response = (await directus.request(`/items/job_search_runs?${params.toString()}`)) as {
+    data?: JobSearchRun[];
+  };
   return (response.data || []).filter((run) => run.source === "linkedin" && run.url);
 }
 
@@ -225,9 +220,10 @@ async function loadSourceRuns(
   }
   if (requested.has("justjoinit")) {
     runs.push(
-      ...sourceUrls(config, "justjoinit", [
-        "https://justjoin.it/job-offers/poland-remote/devops"
-      ]).map((url, index) => ({
+      ...(config.source?.justjoinit?.searchUrls?.length
+        ? config.source.justjoinit.searchUrls
+        : ["https://justjoin.it/job-offers/poland-remote/devops"]
+      ).map((url, index) => ({
         id: `justjoinit-${index + 1}`,
         source: "justjoinit",
         query: "DevOps remote",
@@ -239,23 +235,25 @@ async function loadSourceRuns(
   }
   if (requested.has("nofluffjobs")) {
     runs.push(
-      ...sourceUrls(config, "nofluffjobs", ["https://nofluffjobs.com/pl/devops/remote"]).map(
-        (url, index) => ({
-          id: `nofluffjobs-${index + 1}`,
-          source: "nofluffjobs",
-          query: "DevOps remote",
-          location: "Poland",
-          workplace: "remote",
-          url
-        })
-      )
+      ...(config.source?.nofluffjobs?.searchUrls?.length
+        ? config.source.nofluffjobs.searchUrls
+        : ["https://nofluffjobs.com/pl/devops/remote"]
+      ).map((url, index) => ({
+        id: `nofluffjobs-${index + 1}`,
+        source: "nofluffjobs",
+        query: "DevOps remote",
+        location: "Poland",
+        workplace: "remote",
+        url
+      }))
     );
   }
   if (requested.has("weworkremotely")) {
     runs.push(
-      ...sourceUrls(config, "weworkremotely", [
-        "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs"
-      ]).map((url, index) => ({
+      ...(config.source?.weworkremotely?.searchUrls?.length
+        ? config.source.weworkremotely.searchUrls
+        : ["https://weworkremotely.com/categories/remote-devops-sysadmin-jobs"]
+      ).map((url, index) => ({
         id: `weworkremotely-${index + 1}`,
         source: "weworkremotely",
         query: "DevOps remote",
@@ -267,27 +265,20 @@ async function loadSourceRuns(
   }
   if (requested.has("eurotoptech")) {
     runs.push(
-      ...sourceUrls(config, "eurotoptech", ["https://www.eurotoptech.com/jobs/role/devops"]).map(
-        (url, index) => ({
-          id: `eurotoptech-${index + 1}`,
-          source: "eurotoptech",
-          query: "DevOps Europe",
-          location: "Europe",
-          workplace: "unknown",
-          url
-        })
-      )
+      ...(config.source?.eurotoptech?.searchUrls?.length
+        ? config.source.eurotoptech.searchUrls
+        : ["https://www.eurotoptech.com/jobs/role/devops"]
+      ).map((url, index) => ({
+        id: `eurotoptech-${index + 1}`,
+        source: "eurotoptech",
+        query: "DevOps Europe",
+        location: "Europe",
+        workplace: "unknown",
+        url
+      }))
     );
   }
   return runs;
-}
-
-function sourceUrls(
-  config: Config,
-  source: Exclude<JobSource, "linkedin">,
-  fallback: string[]
-): string[] {
-  return config.source?.[source]?.searchUrls?.length ? config.source[source].searchUrls : fallback;
 }
 
 export async function fetchSourceHtml(url: string): Promise<string> {
@@ -759,7 +750,7 @@ function cleanText(value: string): string {
   return decodeHtml(value)
     .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
     .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+    .replace(/<[^>]+>/g, " ") // codeql[js/bad-tag-filter] - text extraction only, not security sanitization
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -780,11 +771,7 @@ function decodeHtml(value: string): string {
 }
 
 function stableId(value: string): string {
-  let hash = 0;
-  for (const char of normalize(value)) {
-    hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
-  }
-  return Math.abs(hash).toString(36);
+  return createHash("sha256").update(normalize(value)).digest("hex").slice(0, 8);
 }
 
 function formatSalaryRange(
