@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "ES2022"],
+    "strict": true,
+    "module": "none",
+    "rootDir": "public",
+    "outFile": "public/admin.js",
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["public/admin.ts"]
+}

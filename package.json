@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.browser.json",
+    "build:admin": "tsc -p tsconfig.browser.json",
     "typecheck": "tsc --noEmit",
     "provision:directus": "node --import tsx/esm scripts/provision-directus.ts",
     "admin": "python3 -m http.server 4173 --directory public",
