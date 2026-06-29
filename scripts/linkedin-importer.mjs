@@ -71,7 +71,9 @@ export async function importLinkedInJobs({
           continue;
         }
 
-        const existing = dryRun ? null : await findExistingByUrl(client, enrichedJob.url, "id,url,is_expired,salary");
+        const existing = dryRun
+          ? null
+          : await findExistingByUrl(client, enrichedJob.url, "id,url,is_expired,salary");
         if (existing) {
           if (enrichedJob.no_longer_accepting && !existing.is_expired) {
             await client.request(`/items/job_leads/${encodeURIComponent(existing.id)}`, {
@@ -932,4 +934,3 @@ function normalize(value) {
     .replace(/\s+/g, " ")
     .trim();
 }
-

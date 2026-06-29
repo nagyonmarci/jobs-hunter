@@ -117,11 +117,17 @@ await ensureField("job_leads", "generated_cv_pdf", "uuid", {
   note: "Generated PDF CV file for this lead (reference to directus_files)."
 });
 
-await ensureCollection("base_cv", "Master CV for generating optimized resumes.", { singleton: true });
-await ensureField("base_cv", "content", "text", { note: "The full content of your master CV in markdown." });
+await ensureCollection("base_cv", "Master CV for generating optimized resumes.", {
+  singleton: true
+});
+await ensureField("base_cv", "content", "text", {
+  note: "The full content of your master CV in markdown."
+});
 
 await ensureCollection("app_settings", "Application settings and API keys.", { singleton: true });
-await ensureField("app_settings", "preferred_llm", "string", { note: "openai, anthropic, or gemini" });
+await ensureField("app_settings", "preferred_llm", "string", {
+  note: "openai, anthropic, or gemini"
+});
 await ensureField("app_settings", "openai_api_key", "string");
 await ensureField("app_settings", "anthropic_api_key", "string");
 await ensureField("app_settings", "gemini_api_key", "string");

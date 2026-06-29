@@ -4,8 +4,12 @@ import { createDirectusClient } from "./directus-client.mjs";
 
 const EXPIRE_AFTER_DAYS = Number(process.env.EXPIRE_AFTER_DAYS || 30);
 const EXPIRE_CHECK_MS = Number(process.env.EXPIRE_CHECK_INTERVAL_HOURS || 24) * 3_600_000;
-const SCHEDULED_RUN_LIMIT = process.env.SCHEDULED_RUN_LIMIT ? Number(process.env.SCHEDULED_RUN_LIMIT) : -1;
-const SCHEDULED_MAX_JOBS_PER_RUN = process.env.SCHEDULED_MAX_JOBS_PER_RUN ? Number(process.env.SCHEDULED_MAX_JOBS_PER_RUN) : -1;
+const SCHEDULED_RUN_LIMIT = process.env.SCHEDULED_RUN_LIMIT
+  ? Number(process.env.SCHEDULED_RUN_LIMIT)
+  : -1;
+const SCHEDULED_MAX_JOBS_PER_RUN = process.env.SCHEDULED_MAX_JOBS_PER_RUN
+  ? Number(process.env.SCHEDULED_MAX_JOBS_PER_RUN)
+  : -1;
 
 const port = Number(process.env.IMPORT_SERVER_PORT || 4180);
 let corsOrigin = "http://localhost:4173";
@@ -29,8 +33,8 @@ const server = http.createServer(async (request, response) => {
       const body = await readJsonBody(request);
       const summary = await importLinkedInJobs({
         sources: body.sources || ["linkedin"],
-        runLimit: (Number(body.runLimit) > 0 ? Number(body.runLimit) : 25),
-        maxJobsPerRun: (Number(body.maxJobsPerRun) > 0 ? Number(body.maxJobsPerRun) : 25),
+        runLimit: Number(body.runLimit) > 0 ? Number(body.runLimit) : 25,
+        maxJobsPerRun: Number(body.maxJobsPerRun) > 0 ? Number(body.maxJobsPerRun) : 25,
         filters: body.filters || {},
         dryRun: Boolean(body.dryRun)
       });
@@ -47,11 +51,11 @@ const server = http.createServer(async (request, response) => {
       if (!body.jobId) {
         return sendJson(response, 400, { error: "jobId is required" });
       }
-      
+
       // Dynamic import to avoid loading Puppeteer and heavy LLM libs until needed
       const { processCvGeneration } = await import("./generate-cv.mjs");
       const result = await processCvGeneration(body.jobId);
-      
+
       sendJson(response, 200, result);
     } catch (error) {
       console.error(error);
@@ -74,8 +78,13 @@ const server = http.createServer(async (request, response) => {
 });
 
 async function scheduledRun() {
-  const summary = await importLinkedInJobs({ runLimit: SCHEDULED_RUN_LIMIT, maxJobsPerRun: SCHEDULED_MAX_JOBS_PER_RUN });
-  console.log(`Scheduled import: created ${summary.created}, markedExpired ${summary.markedExpired ?? 0}.`);
+  const summary = await importLinkedInJobs({
+    runLimit: SCHEDULED_RUN_LIMIT,
+    maxJobsPerRun: SCHEDULED_MAX_JOBS_PER_RUN
+  });
+  console.log(
+    `Scheduled import: created ${summary.created}, markedExpired ${summary.markedExpired ?? 0}.`
+  );
   const { expired } = await expireStaleJobs();
   console.log(`Expire check: ${expired} expired.`);
 }

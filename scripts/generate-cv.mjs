@@ -14,7 +14,7 @@ async function takeScreenshot(url, outputPath) {
     await page.setViewport({ width: 1280, height: 1024 });
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
     // wait a bit for dynamic content
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     await page.screenshot({ path: outputPath, fullPage: true });
   } finally {
     await browser.close();
@@ -27,13 +27,18 @@ async function extractTextFromScreenshot(imagePath, apiKey) {
   const base64 = (await fs.readFile(imagePath)).toString("base64");
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
-    messages: [{
-      role: "user",
-      content: [
-        { type: "image_url", image_url: { url: `data:image/png;base64,${base64}` } },
-        { type: "text", text: "Extract all visible text from this screenshot and return it as markdown." }
-      ]
-    }]
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: `data:image/png;base64,${base64}` } },
+          {
+            type: "text",
+            text: "Extract all visible text from this screenshot and return it as markdown."
+          }
+        ]
+      }
+    ]
   });
   return response.choices[0].message.content;
 }
@@ -86,20 +91,26 @@ export async function processCvGeneration(jobId) {
   // 3. If no description, take screenshot and extract via markitdown
   if (!description) {
     if (!settings.openai_api_key) {
-      throw new Error("OpenAI API Key is required for image text extraction (markitdown uses OpenAI Vision).");
+      throw new Error(
+        "OpenAI API Key is required for image text extraction (markitdown uses OpenAI Vision)."
+      );
     }
     const screenshotPath = path.resolve(`data/screenshot-${jobId}.png`);
     await takeScreenshot(job.url, screenshotPath);
     description = await extractTextFromScreenshot(screenshotPath, settings.openai_api_key);
-    
+
     // Save extracted description to job lead
     await directus.request(`/items/job_leads/${jobId}`, {
       method: "PATCH",
       body: JSON.stringify({ description })
     });
-    
+
     // Cleanup screenshot
-    try { await fs.unlink(screenshotPath); } catch { /* swallow */ }
+    try {
+      await fs.unlink(screenshotPath);
+    } catch {
+      /* swallow */
+    }
   }
 
   // 4. Fetch Base CV
@@ -133,13 +144,13 @@ ${description}
     const formData = new FormData();
     const blob = new Blob([pdfBuffer.content], { type: "application/pdf" });
     formData.append("file", blob, `cv-${jobId}.pdf`);
-    
+
     // Wait, node-fetch/undici supports FormData, but let's use manual upload or the simpler base64 via API
     // Actually directus REST API /files accepts multipart/form-data.
     const uploadRes = await fetch(`${process.env.DIRECTUS_URL}/files`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.DIRECTUS_TOKEN}`,
+        Authorization: `Bearer ${process.env.DIRECTUS_TOKEN}`
       },
       body: formData
     });
@@ -147,7 +158,6 @@ ${description}
     if (uploadData.data && uploadData.data.id) {
       fileId = uploadData.data.id;
     }
-    
   }
 
   // 8. Update Job Lead with Generated CV
