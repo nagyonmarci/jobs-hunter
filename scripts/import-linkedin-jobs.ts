@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { createDirectusClient } from "./directus-client.js";
+import { createDirectusClient, findExistingByUrl } from "./directus-client.js";
 import type {
   Config,
   DirectusClient,
@@ -23,6 +23,7 @@ interface ExistingJob {
   id: string;
   url: string;
   salary: string | null;
+  is_expired?: boolean;
 }
 
 interface ScoreInput {
@@ -93,6 +94,8 @@ export async function importLinkedInJobs({
     salaryUpdated: 0,
     skippedExisting: 0,
     skippedFiltered: 0,
+    markedExpired: 0,
+    skippedExpired: 0,
     filterReasons: {},
     failedRuns: 0,
     dryRun,
@@ -105,7 +108,8 @@ export async function importLinkedInJobs({
       const html = await fetchSourceHtml(run.url);
       summary.fetched += 1;
 
-      const jobs = extractJobsForRun(html, run, config).slice(0, maxJobsPerRun);
+      const allJobs = extractJobsForRun(html, run, config);
+      const jobs = maxJobsPerRun > 0 ? allJobs.slice(0, maxJobsPerRun) : allJobs;
       summary.parsed += jobs.length;
 
       for (const job of jobs) {
@@ -133,8 +137,21 @@ export async function importLinkedInJobs({
           continue;
         }
 
-        const existing = dryRun ? null : await findExistingByUrl(client, enrichedJob.url);
+        const existing = dryRun
+          ? null
+          : await findExistingByUrl<ExistingJob>(
+              client,
+              enrichedJob.url,
+              "id,url,is_expired,salary"
+            );
         if (existing) {
+          if (enrichedJob.no_longer_accepting && !existing.is_expired) {
+            await client.request(`/items/job_leads/${encodeURIComponent(existing.id)}`, {
+              method: "PATCH",
+              body: JSON.stringify({ is_expired: true })
+            });
+            summary.markedExpired += 1;
+          }
           if (!existing.salary && enrichedJob.salary) {
             await client.request(`/items/job_leads/${encodeURIComponent(existing.id)}`, {
               method: "PATCH",
@@ -146,10 +163,17 @@ export async function importLinkedInJobs({
           continue;
         }
 
+        if (enrichedJob.no_longer_accepting) {
+          summary.skippedExpired += 1;
+          continue;
+        }
+
         if (!dryRun) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { no_longer_accepting: _, ...jobPayload } = enrichedJob;
           await client.request("/items/job_leads", {
             method: "POST",
-            body: JSON.stringify(enrichedJob)
+            body: JSON.stringify(jobPayload)
           });
         }
         summary.created += 1;
@@ -266,10 +290,6 @@ function sourceUrls(
   return config.source?.[source]?.searchUrls?.length ? config.source[source].searchUrls : fallback;
 }
 
-export async function fetchLinkedInHtml(url: string): Promise<string> {
-  return fetchSourceHtml(url);
-}
-
 export async function fetchSourceHtml(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: {
@@ -287,14 +307,23 @@ export async function fetchSourceHtml(url: string): Promise<string> {
 
 async function enrichJob(job: Job): Promise<Job> {
   if (job.source === "linkedin") return enrichLinkedInJob(job);
+  if (job.source === "justjoinit") return enrichJustJoinItJob(job);
   return {
     ...job,
     language: job.language || detectLanguage(`${job.title} ${job.notes || ""}`)
   };
 }
 
+async function enrichJustJoinItJob(job: Job): Promise<Job> {
+  const html = await fetchSourceHtml(job.url);
+  return {
+    ...job,
+    no_longer_accepting: html.includes("Offer expired")
+  };
+}
+
 export async function enrichLinkedInJob(job: Job): Promise<Job> {
-  const html = await fetchLinkedInHtml(job.url);
+  const html = await fetchSourceHtml(job.url);
   const title =
     firstText(html, [
       /class="[^"]*top-card-layout__title[^"]*"[^>]*>([\s\S]*?)<\/h1>/i,
@@ -316,7 +345,8 @@ export async function enrichLinkedInJob(job: Job): Promise<Job> {
     title,
     company: company || job.company || null,
     language,
-    notes: description ? description.slice(0, 600) : job.notes
+    notes: description ? description.slice(0, 600) : job.notes,
+    no_longer_accepting: html.includes("No longer accepting applications")
   };
 }
 
@@ -998,19 +1028,4 @@ function normalize(value: unknown): string {
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
-}
-
-async function findExistingByUrl(
-  directus: DirectusClient,
-  url: string
-): Promise<ExistingJob | null> {
-  const params = new URLSearchParams({
-    "filter[url][_eq]": url,
-    limit: "1",
-    fields: "id,url,salary"
-  });
-  const response = (await directus.request(
-    `/items/job_leads?${params.toString()}`
-  )) as DirectusListResponse<ExistingJob>;
-  return response.data?.[0] || null;
 }

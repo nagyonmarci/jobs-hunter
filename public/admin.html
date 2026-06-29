@@ -57,6 +57,37 @@
             </label>
           </div>
 
+          <div class="panel-header" style="margin-top: 1rem;">
+            <div>
+              <h2>LLM Configuration</h2>
+              <p>For ATS CV Generation.</p>
+            </div>
+          </div>
+          
+          <label>
+            Preferred LLM
+            <select id="preferredLlm">
+              <option value="openai">OpenAI (GPT-4o)</option>
+              <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
+              <option value="gemini">Google Gemini</option>
+            </select>
+          </label>
+          
+          <label>
+            OpenAI API Key
+            <input id="openaiApiKey" type="password" placeholder="sk-...">
+          </label>
+
+          <label>
+            Anthropic API Key
+            <input id="anthropicApiKey" type="password" placeholder="sk-ant-...">
+          </label>
+
+          <label>
+            Gemini API Key
+            <input id="geminiApiKey" type="password" placeholder="AIza...">
+          </label>
+
           <div class="button-row">
             <button type="button" id="saveSettings">Save settings</button>
             <button type="button" class="secondary" id="loginDirectus">Login</button>
@@ -247,7 +278,10 @@
               <h2>Job Leads</h2>
               <p id="leadCount">Not loaded.</p>
             </div>
-            <button type="button" class="secondary" id="loadLeads">Refresh leads</button>
+            <div class="button-row">
+              <button type="button" class="secondary" id="loadLeads">Refresh leads</button>
+              <button type="button" class="secondary" id="detectExpired">Detect expired</button>
+            </div>
           </div>
 
           <div class="lead-toolbar">
@@ -296,6 +330,14 @@
                 <option value="">All</option>
                 <option value="unread">Unread</option>
                 <option value="read">Read</option>
+              </select>
+            </label>
+            <label>
+              Expired
+              <select id="leadExpiredFilter">
+                <option value="hide">Hide expired</option>
+                <option value="">All</option>
+                <option value="show">Expired only</option>
               </select>
             </label>
             <label>
@@ -368,6 +410,22 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <dialog id="cvModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Generated CV</h2>
+          <button type="button" class="close-btn" id="closeCvModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <textarea id="cvMarkdown" rows="20" style="width:100%;" readonly></textarea>
+        </div>
+        <div class="modal-footer">
+          <a id="downloadPdfLink" href="#" target="_blank" class="button" style="display:none;">Download PDF</a>
+        </div>
+      </div>
+    </dialog>
+
     <script type="module" src="./admin.js"></script>
   </body>
 </html>

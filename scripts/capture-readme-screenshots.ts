@@ -1,23 +1,5 @@
 import fs from "node:fs/promises";
-
-interface ChromeTarget {
-  webSocketDebuggerUrl: string;
-}
-
-interface CdpMessage {
-  id?: number;
-  result?: unknown;
-  error?: unknown;
-}
-
-interface CdpResult<T = Record<string, unknown>> {
-  result: T;
-}
-
-interface PendingCommand {
-  resolve: (value: unknown) => void;
-  reject: (reason?: unknown) => void;
-}
+import puppeteer from "puppeteer";
 
 const chromePort = process.env.CHROME_DEBUG_PORT || "9223";
 const baseUrl = process.env.SCREENSHOT_BASE_URL || "http://localhost:4173/admin.html";
@@ -27,65 +9,6 @@ const directusPassword = process.env.DIRECTUS_PASSWORD || "change-me-please";
 const outputDir = "docs/screenshots";
 
 await fs.mkdir(outputDir, { recursive: true });
-
-const target = (await (
-  await fetch(`http://127.0.0.1:${chromePort}/json/new?${encodeURIComponent(baseUrl)}`, {
-    method: "PUT"
-  })
-).json()) as ChromeTarget;
-
-const ws = new WebSocket(target.webSocketDebuggerUrl);
-let id = 0;
-const pending = new Map<number, PendingCommand>();
-
-ws.addEventListener("message", (event) => {
-  const message = JSON.parse(String(event.data)) as CdpMessage;
-  if (!message.id || !pending.has(message.id)) return;
-  const command = pending.get(message.id);
-  if (!command) return;
-  const { resolve, reject } = command;
-  pending.delete(message.id);
-  if (message.error) reject(new Error(JSON.stringify(message.error)));
-  else resolve(message.result);
-});
-
-await new Promise<void>((resolve) => ws.addEventListener("open", () => resolve(), { once: true }));
-
-function command(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
-  const commandId = ++id;
-  ws.send(JSON.stringify({ id: commandId, method, params }));
-  return new Promise((resolve, reject) => pending.set(commandId, { resolve, reject }));
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function evaluate(expression: string): Promise<CdpResult<{ value?: unknown }>> {
-  return command("Runtime.evaluate", {
-    expression,
-    awaitPromise: true,
-    returnByValue: true
-  }) as Promise<CdpResult<{ value?: unknown }>>;
-}
-
-async function waitForText(text: string, timeout = 15000): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    const result = await evaluate("document.body && document.body.innerText || ''");
-    if (String(result.result.value || "").includes(text)) return;
-    await wait(300);
-  }
-  throw new Error(`Timed out waiting for "${text}"`);
-}
-
-async function screenshot(path: string): Promise<void> {
-  const result = (await command("Page.captureScreenshot", {
-    format: "png",
-    captureBeyondViewport: false
-  })) as { data: string };
-  await fs.writeFile(path, Buffer.from(result.data, "base64"));
-}
 
 const settings = {
   directusUrl,
@@ -158,17 +81,13 @@ const settings = {
   postedWithin: "r604800"
 };
 
-await command("Page.enable");
-await command("Runtime.enable");
-await command("Emulation.setDeviceMetricsOverride", {
-  width: 1440,
-  height: 1000,
-  deviceScaleFactor: 1,
-  mobile: false
-});
+const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${chromePort}` });
+const page = await browser.newPage();
+await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 1 });
 
-await command("Page.navigate", { url: baseUrl });
-await waitForText("Job Search Admin");
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const waitForText = (text: string, timeout = 15000) =>
+  page.waitForFunction(`(t) => document.body?.innerText?.includes(t)`, { timeout }, text);
 
 const loginScript = `
   (async () => {
@@ -196,27 +115,29 @@ const loginScript = `
   })()
 `;
 
-await evaluate(loginScript);
-await command("Page.navigate", { url: baseUrl });
+await page.goto(baseUrl);
+await waitForText("Job Search Admin");
+await page.evaluate(loginScript);
+await page.goto(baseUrl);
 await waitForText("Connected");
 await wait(800);
-await screenshot(`${outputDir}/admin-setup.png`);
+await page.screenshot({ path: `${outputDir}/admin-setup.png` });
 
-await evaluate('localStorage.setItem("jobhunter_active_tab", "leads")');
-await command("Page.navigate", { url: baseUrl });
+await page.evaluate('localStorage.setItem("jobhunter_active_tab", "leads")');
+await page.goto(baseUrl);
 await waitForText("Refresh leads");
 await waitForText("shown", 20000);
 await wait(1000);
-await screenshot(`${outputDir}/job-leads-list.png`);
+await page.screenshot({ path: `${outputDir}/job-leads-list.png` });
 
-await evaluate(`
+await page.evaluate(`
   document.querySelector("#leadSalaryFilter").value = "PLN";
   document.querySelector("#leadSalaryFilter").dispatchEvent(new Event("input", { bubbles: true }));
   document.querySelector("#loadLeads").click();
 `);
 await waitForText("PLN", 10000);
 await wait(500);
-await screenshot(`${outputDir}/job-leads-salary-filter.png`);
+await page.screenshot({ path: `${outputDir}/job-leads-salary-filter.png` });
 
-ws.close();
+await browser.disconnect();
 console.log("Saved README screenshots.");

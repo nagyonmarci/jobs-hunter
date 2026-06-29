@@ -104,7 +104,7 @@ It creates:
 - `job_leads`
 - `job_search_runs`
 
-`job_leads` stores normalized fields for each role, including source, source id, title, optional company, location, workplace, seniority, language, URL, apply URL, status, score, public salary/compensation, read state, and notes.
+`job_leads` stores normalized fields for each role, including source, source id, title, optional company, location, workplace, seniority, language, URL, apply URL, status, score, public salary/compensation, read state, notes, creation timestamp, and expiry state.
 
 If your local shell cannot reach `localhost:8055`, run provisioning inside the Docker network:
 
@@ -128,7 +128,9 @@ The admin UI lets you:
 - save generated search runs into Directus,
 - import concrete jobs from selected public sources,
 - manually add reviewed job leads,
-- review job leads with search, per-field filters, salary filtering, sorting, and read/unread marking.
+- review job leads with search, per-field filters, salary filtering, sorting, and read/unread marking,
+- filter out expired listings (hidden by default), manually mark individual leads as expired,
+- trigger expiry detection across all leads via **Detect expired** (URL 404 check for non-LinkedIn sources, time-based fallback via `EXPIRE_AFTER_DAYS`, default 30).
 
 For browser writes, create a Directus static token:
 
@@ -192,6 +194,8 @@ http://localhost:4173/admin.html
 
 If Directus is not configured for browser requests, enable CORS in your Directus deployment for the admin UI origin.
 
+The importer API reads `cors_origin` from the `app_settings` Directus collection at startup to set its allowed origin header. If the field is absent or empty, it falls back to `http://localhost:4173`.
+
 ## Generate LinkedIn searches
 
 Edit [config/searches.json](config/searches.json).
@@ -235,6 +239,8 @@ The importer:
 - parses visible job cards into `job_leads`,
 - stores public salary or compensation text when the source exposes it,
 - backfills salary on existing leads when the URL already exists and the salary field is still empty,
+- detects LinkedIn "No longer accepting applications" and Just Join IT "Offer expired" on enriched leads and marks them `is_expired`,
+- skips new LinkedIn leads already marked "No longer accepting applications" without saving them,
 - skips existing leads by URL,
 - filters obvious senior/lead/principal/staff roles,
 - filters obvious non-Hungarian/non-English titles,

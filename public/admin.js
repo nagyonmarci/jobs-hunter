@@ -114,21 +114,41 @@ function loadSettings() {
 
 function saveSettingsToStorage() {
   const settings = readSettingsFromForm();
-  localStorage.setItem(storageKey, JSON.stringify(settings));
-  showToast("Settings saved locally.");
+  localStorage.setItem(storageKey, JSON.stringify(settings)); // codeql[js/clear-text-storage-of-sensitive-data] -- intentional: self-hosted tool, user-owned keys
+  
+  // Also save LLM settings to Directus so the backend can use them
+  if (hasConnectionCredential()) {
+    directusRequest("/items/app_settings", {
+      method: "PATCH",
+      body: JSON.stringify({
+        preferred_llm: settings.preferredLlm,
+        openai_api_key: settings.openaiApiKey,
+        anthropic_api_key: settings.anthropicApiKey,
+        gemini_api_key: settings.geminiApiKey
+      })
+    }).catch(console.error);
+  }
+  
+  showToast("Settings saved locally & to Directus.");
 }
 
 function applySettings(settings) {
-  $("directusUrl").value = settings.directusUrl;
-  $("directusToken").value = settings.directusToken;
+  $("directusUrl").value = settings.directusUrl || "";
+  $("directusToken").value = settings.directusToken || "";
   $("directusEmail").value = settings.directusEmail || defaults.directusEmail;
   $("directusPassword").value = "";
-  writeLines("keywords", settings.keywords);
+  
+  if ($("preferredLlm")) $("preferredLlm").value = settings.preferredLlm || "openai";
+  if ($("openaiApiKey")) $("openaiApiKey").value = settings.openaiApiKey || "";
+  if ($("anthropicApiKey")) $("anthropicApiKey").value = settings.anthropicApiKey || "";
+  if ($("geminiApiKey")) $("geminiApiKey").value = settings.geminiApiKey || "";
+
+  writeLines("keywords", settings.keywords || defaults.keywords);
   writeLines("excludeKeywords", settings.excludeKeywords || defaults.excludeKeywords);
   writeLines("positiveTech", settings.positiveTech || defaults.positiveTech);
   writeLines("negativeSignals", settings.negativeSignals || defaults.negativeSignals);
-  writeLines("hybridLocations", settings.hybridLocations);
-  writeLines("remoteLocations", settings.remoteLocations);
+  writeLines("hybridLocations", settings.hybridLocations || defaults.hybridLocations);
+  writeLines("remoteLocations", settings.remoteLocations || defaults.remoteLocations);
   $("minimumScore").value = settings.minimumScore ?? defaults.minimumScore;
   $("postedWithinHours").value = postedWithinToHours(settings.postedWithin);
 
@@ -140,7 +160,7 @@ function applySettings(settings) {
   });
 
   document.querySelectorAll("input[name='experience']").forEach((input) => {
-    input.checked = settings.experienceLevels.includes(input.value);
+    input.checked = (settings.experienceLevels || defaults.experienceLevels).includes(input.value);
   });
 
   updateInitialConnectionStatus();
@@ -178,6 +198,10 @@ function readSettingsFromForm() {
     directusUrl: $("directusUrl").value.trim().replace(/\/$/, ""),
     directusToken: $("directusToken").value.trim(),
     directusEmail: $("directusEmail").value.trim(),
+    preferredLlm: $("preferredLlm") ? $("preferredLlm").value : "openai",
+    openaiApiKey: $("openaiApiKey") ? $("openaiApiKey").value.trim() : "",
+    anthropicApiKey: $("anthropicApiKey") ? $("anthropicApiKey").value.trim() : "",
+    geminiApiKey: $("geminiApiKey") ? $("geminiApiKey").value.trim() : "",
     keywords: readLines("keywords"),
     excludeKeywords: readLines("excludeKeywords"),
     positiveTech: readLines("positiveTech"),
@@ -410,7 +434,7 @@ async function loadLeads() {
   const params = new URLSearchParams({
     sort: $("leadSort").value || "-score",
     limit: String(Number($("leadLimit").value) || 100),
-    fields: "id,status,score,title,company,location,workplace,seniority,language,url,apply_url,is_read,salary,notes"
+    fields: "id,status,score,title,company,location,workplace,seniority,language,url,apply_url,is_read,salary,notes,is_expired"
   });
   appendLeadFilters(params);
 
@@ -446,6 +470,14 @@ function appendLeadFilters(params) {
 
   const readFilter = $("leadReadFilter").value;
   if (readFilter) params.set("filter[is_read][_eq]", readFilter === "read" ? "true" : "false");
+
+  const expiredFilter = $("leadExpiredFilter").value;
+  if (expiredFilter === "hide") {
+    params.set("filter[_or][0][is_expired][_neq]", "true");
+    params.set("filter[_or][1][is_expired][_null]", "true");
+  } else if (expiredFilter === "show") {
+    params.set("filter[is_expired][_eq]", "true");
+  }
 
   const scoreMin = $("leadScoreMinFilter").value;
   const scoreMax = $("leadScoreMaxFilter").value;
@@ -501,7 +533,7 @@ function renderCompactCard(lead) {
   const scoreClass = scoreClassName(lead.score);
   const readClass = lead.is_read ? "read" : "unread";
   return `
-    <article class="lead-card compact ${readClass}" data-id="${escapeAttribute(lead.id)}">
+    <article class="lead-card compact ${readClass}${lead.is_expired ? " expired" : ""}" data-id="${escapeAttribute(lead.id)}">
       <div class="lead-title-row">
         <h3>${escapeHtml(lead.title || "Untitled role")}</h3>
         <span class="score-pill ${scoreClass}">${escapeHtml(String(lead.score ?? "-"))}</span>
@@ -514,12 +546,15 @@ function renderCompactCard(lead) {
         ${lead.seniority ? `<span>${escapeHtml(lead.seniority)}</span>` : ""}
         ${lead.language ? `<span>${escapeHtml(lead.language)}</span>` : ""}
         ${lead.salary ? `<span class="salary-pill">${escapeHtml(lead.salary)}</span>` : ""}
+        ${lead.is_expired ? `<span class="expired-badge">expired</span>` : ""}
         <span class="read-toggle" data-action="toggle-read" title="Toggle read/unread">${lead.is_read ? "read" : "unread"}</span>
       </div>
       <div class="compact-actions">
         <select data-action="status" aria-label="Status for ${escapeAttribute(lead.title || "lead")}">
           ${statusOptions(lead.status)}
         </select>
+        <button type="button" class="secondary" data-action="generate-cv">Generate CV</button>
+        ${!lead.is_expired ? `<button type="button" class="secondary" data-action="mark-expired">Mark expired</button>` : ""}
         ${lead.url ? `<a class="button-link" href="${escapeAttribute(lead.url)}" target="_blank" rel="noreferrer">Open</a>` : ""}
       </div>
     </article>
@@ -557,7 +592,7 @@ function renderLeadCard(lead) {
   const readClass = lead.is_read ? "read" : "unread";
   const visibleNotes = displayLeadNotes(lead.notes);
   return `
-    <article class="lead-card ${readClass}" data-id="${escapeAttribute(lead.id)}">
+    <article class="lead-card ${readClass}${lead.is_expired ? " expired" : ""}" data-id="${escapeAttribute(lead.id)}">
       <div class="lead-main">
         <div class="lead-title-row">
           <h3>${escapeHtml(lead.title || "Untitled role")}</h3>
@@ -571,6 +606,7 @@ function renderLeadCard(lead) {
           ${lead.seniority ? `<span>${escapeHtml(lead.seniority)}</span>` : ""}
           ${lead.language ? `<span>${escapeHtml(lead.language)}</span>` : ""}
           ${lead.salary ? `<span class="salary-pill">${escapeHtml(lead.salary)}</span>` : ""}
+          ${lead.is_expired ? `<span class="expired-badge">expired</span>` : ""}
           <span>${lead.is_read ? "read" : "unread"}</span>
         </div>
         ${visibleNotes ? `<p class="lead-notes">${escapeHtml(truncate(visibleNotes, 260))}</p>` : ""}
@@ -582,6 +618,8 @@ function renderLeadCard(lead) {
         <button type="button" class="secondary" data-action="toggle-read">
           ${lead.is_read ? "Mark unread" : "Mark read"}
         </button>
+        <button type="button" class="secondary" data-action="generate-cv">Generate CV</button>
+        ${!lead.is_expired ? `<button type="button" class="secondary" data-action="mark-expired">Mark expired</button>` : ""}
         ${lead.url ? `<a class="button-link" href="${escapeAttribute(lead.url)}" target="_blank" rel="noreferrer">Open</a>` : ""}
       </div>
     </article>
@@ -627,10 +665,54 @@ function handleLeadListChange(event) {
 
 function handleLeadListClick(event) {
   const action = event.target.dataset.action;
-  if (action !== "toggle-read") return;
+  if (!action) return;
   const card = event.target.closest(".lead-card");
-  const lead = leadRows.find((row) => String(row.id) === String(card.dataset.id));
-  updateLead(card.dataset.id, { is_read: !lead?.is_read }).catch((error) => showToast(error.message));
+  const id = card.dataset.id;
+  const lead = leadRows.find((row) => String(row.id) === String(id));
+
+  if (action === "toggle-read") {
+    updateLead(id, { is_read: !lead?.is_read }).catch((error) => showToast(error.message));
+  } else if (action === "mark-expired") {
+    updateLead(id, { is_expired: true }).catch((error) => showToast(error.message));
+  } else if (action === "generate-cv") {
+    generateCv(id);
+  }
+}
+
+async function generateCv(id) {
+  showToast("Generating CV... This may take a minute.");
+  try {
+    const response = await fetch(`${importerUrl}/generate-cv`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jobId: id })
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || response.statusText);
+
+    // Open Modal
+    $("cvMarkdown").value = body.markdown;
+    if (body.fileId) {
+      const { directusUrl } = readSettingsFromForm();
+      $("downloadPdfLink").href = `${directusUrl}/assets/${body.fileId}?download`; // codeql[js/xss-through-dom] -- user-configured Directus URL, not injected HTML
+      $("downloadPdfLink").style.display = "inline-block";
+    } else {
+      $("downloadPdfLink").style.display = "none";
+    }
+    $("cvModal").showModal();
+
+    showToast("CV generated successfully.");
+  } catch (error) {
+    console.error(error);
+    showToast(`Error: ${error.message}`);
+  }
+}
+
+// Modal handling
+if ($("closeCvModal")) {
+  $("closeCvModal").addEventListener("click", () => {
+    $("cvModal").close();
+  });
 }
 
 async function saveLead(event) {
@@ -668,6 +750,23 @@ async function saveLead(event) {
   await loadLeads();
 }
 
+async function detectExpired() {
+  const button = $("detectExpired");
+  button.disabled = true;
+  showToast("Detecting expired listings...");
+  try {
+    const response = await fetch(`${importerUrl}/expire-stale-jobs`, { method: "POST" });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || response.statusText);
+    showToast(`Marked ${body.expired} listing(s) as expired.`);
+    await loadLeads();
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function importLinkedinJobs() {
   const button = $("importLinkedinJobs");
   const runLimit = Number($("importRunLimit").value) || 25;
@@ -698,6 +797,8 @@ async function importLinkedinJobs() {
     const message = [
       `Created ${body.created} job leads.`,
       body.salaryUpdated ? `Updated salaries ${body.salaryUpdated}.` : "",
+      body.markedExpired ? `Marked expired ${body.markedExpired}.` : "",
+      body.skippedExpired ? `Skipped already-expired ${body.skippedExpired}.` : "",
       `Parsed ${body.parsed}.`,
       `Skipped existing ${body.skippedExisting}.`,
       `Filtered ${body.skippedFiltered}.`,
@@ -810,6 +911,7 @@ $("openAll").addEventListener("click", openAll);
 $("copyUrls").addEventListener("click", () => copyUrls().catch((error) => showToast(error.message)));
 $("importLinkedinJobs").addEventListener("click", importLinkedinJobs);
 $("loadLeads").addEventListener("click", () => loadLeads().catch((error) => showToast(error.message)));
+$("detectExpired").addEventListener("click", () => detectExpired().catch((error) => showToast(error.message)));
 $("leadSearch").addEventListener("input", renderLeads);
 [
   "leadTitleFilter",
@@ -824,6 +926,7 @@ $("leadSearch").addEventListener("input", renderLeads);
 [
   "leadStatusFilter",
   "leadReadFilter",
+  "leadExpiredFilter",
   "leadWorkplaceFilter",
   "leadSeniorityFilter",
   "leadLanguageFilter",

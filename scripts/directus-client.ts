@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import type { DirectusClient } from "./types.js";
 
 interface DirectusErrorBody {
@@ -8,31 +7,6 @@ interface DirectusErrorBody {
 interface LoginBody extends DirectusErrorBody {
   data?: { access_token?: string };
 }
-
-function parseEnvFile(content: string): Record<string, string> {
-  const env: Record<string, string> = {};
-  const lines = content.split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const index = trimmed.indexOf("=");
-    if (index === -1) continue;
-    const key = trimmed.slice(0, index).trim();
-    const rawValue = trimmed.slice(index + 1).trim();
-    env[key] = rawValue.replace(/^["']|["']$/g, "");
-  }
-  return env;
-}
-
-function loadDotEnv(): void {
-  if (!fs.existsSync(".env")) return;
-  const env = parseEnvFile(fs.readFileSync(".env", "utf8"));
-  for (const [key, value] of Object.entries(env)) {
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
-
-loadDotEnv();
 
 const optional = (name: string): string => {
   const value = process.env[name];
@@ -82,4 +56,16 @@ export async function createDirectusClient(): Promise<DirectusClient> {
   }
 
   return { request };
+}
+
+export async function findExistingByUrl<T = { id: string; url: string }>(
+  directus: DirectusClient,
+  url: string,
+  fields = "id,url"
+): Promise<T | null> {
+  const params = new URLSearchParams({ "filter[url][_eq]": url, limit: "1", fields });
+  const response = (await directus.request(`/items/job_leads?${params.toString()}`)) as {
+    data?: T[];
+  };
+  return response.data?.[0] ?? null;
 }

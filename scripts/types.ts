@@ -21,6 +21,7 @@ export interface Job {
   salary: string | null;
   is_read: boolean;
   notes: string | null;
+  no_longer_accepting?: boolean;
 }
 
 export interface JobSearchRun {
@@ -75,6 +76,8 @@ export interface ImportSummary {
   salaryUpdated: number;
   skippedExisting: number;
   skippedFiltered: number;
+  markedExpired: number;
+  skippedExpired: number;
   filterReasons: Record<string, number>;
   failedRuns: number;
   dryRun: boolean;
