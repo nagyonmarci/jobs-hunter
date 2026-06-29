@@ -1,7 +1,73 @@
 import fs from "node:fs/promises";
-import { createDirectusClient, findExistingByUrl } from "./directus-client.mjs";
+import { createDirectusClient, findExistingByUrl } from "./directus-client.js";
+import type {
+  Config,
+  DirectusClient,
+  ImportOptions,
+  ImportSummary,
+  Job,
+  JobLanguage,
+  JobSearchRun,
+  JobSeniority,
+  JobSource,
+  JobWorkplace
+} from "./types.js";
 
 const defaultConfigPath = "config/searches.json";
+
+interface DirectusListResponse<T> {
+  data?: T[];
+}
+
+interface ExistingJob {
+  id: string;
+  url: string;
+  salary: string | null;
+  is_expired?: boolean;
+}
+
+interface ScoreInput {
+  title: string;
+  location?: string | null;
+  description?: string | null;
+  run: JobSearchRun;
+  config: Config;
+}
+
+interface JustJoinItOffer {
+  slug?: string;
+  title?: string;
+  guid?: string;
+  companyName?: string;
+  city?: string;
+  street?: string;
+  workplaceType?: string;
+  experienceLevel?: string;
+  requiredSkills?: string[];
+  niceToHaveSkills?: string[];
+  employmentTypes?: SalaryEmploymentType[];
+}
+
+interface SalaryEmploymentType {
+  from?: number | string | null;
+  to?: number | string | null;
+  fromPerUnit?: number | string | null;
+  toPerUnit?: number | string | null;
+  currencySource?: string;
+  currency?: string;
+  type?: string;
+  unit?: string;
+  gross?: boolean;
+}
+
+interface EuroTopTechCard {
+  title: string;
+  company: string;
+  location: string;
+  workplace: string;
+  seniority: string;
+  compensation: string;
+}
 
 export async function importLinkedInJobs({
   directus = null,
@@ -12,15 +78,15 @@ export async function importLinkedInJobs({
   maxJobsPerRun = 25,
   dryRun = false,
   logger = () => {}
-} = {}) {
-  const config = JSON.parse(await fs.readFile(configPath, "utf8"));
+}: ImportOptions = {}): Promise<ImportSummary> {
+  const config = JSON.parse(await fs.readFile(configPath, "utf8")) as Config;
   config.filters = {
     ...config.filters,
     ...filters
   };
   const client = directus || (await createDirectusClient());
   const runs = await loadSourceRuns(client, config, sources, runLimit);
-  const summary = {
+  const summary: ImportSummary = {
     runs: runs.length,
     fetched: 0,
     parsed: 0,
@@ -73,7 +139,11 @@ export async function importLinkedInJobs({
 
         const existing = dryRun
           ? null
-          : await findExistingByUrl(client, enrichedJob.url, "id,url,is_expired,salary");
+          : await findExistingByUrl<ExistingJob>(
+              client,
+              enrichedJob.url,
+              "id,url,is_expired,salary"
+            );
         if (existing) {
           if (enrichedJob.no_longer_accepting && !existing.is_expired) {
             await client.request(`/items/job_leads/${encodeURIComponent(existing.id)}`, {
@@ -99,6 +169,7 @@ export async function importLinkedInJobs({
         }
 
         if (!dryRun) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { no_longer_accepting: _, ...jobPayload } = enrichedJob;
           await client.request("/items/job_leads", {
             method: "POST",
@@ -110,35 +181,45 @@ export async function importLinkedInJobs({
     } catch (error) {
       summary.failedRuns += 1;
       summary.failures.push({
-        run: run.id,
+        run: run.id || run.url,
         url: run.url,
-        message: error.message
+        message: error instanceof Error ? error.message : String(error)
       });
-      logger(`Failed: ${error.message}`);
+      logger(`Failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   return summary;
 }
 
-function addFiltered(summary, reason) {
+function addFiltered(summary: ImportSummary, reason: string): void {
   summary.skippedFiltered += 1;
   summary.filterReasons[reason] = (summary.filterReasons[reason] || 0) + 1;
 }
 
-export async function loadSearchRuns(directus, limit) {
+export async function loadSearchRuns(
+  directus: DirectusClient,
+  limit: number
+): Promise<JobSearchRun[]> {
   const params = new URLSearchParams({
     sort: "-id",
     limit: String(limit),
     fields: "id,source,query,location,workplace,url,generated_at"
   });
-  const response = await directus.request(`/items/job_search_runs?${params.toString()}`);
+  const response = (await directus.request(
+    `/items/job_search_runs?${params.toString()}`
+  )) as DirectusListResponse<JobSearchRun>;
   return (response.data || []).filter((run) => run.source === "linkedin" && run.url);
 }
 
-async function loadSourceRuns(directus, config, sources, runLimit) {
+async function loadSourceRuns(
+  directus: DirectusClient,
+  config: Config,
+  sources: string[],
+  runLimit: number
+): Promise<JobSearchRun[]> {
   const requested = new Set(sources?.length ? sources : ["linkedin"]);
-  const runs = [];
+  const runs: JobSearchRun[] = [];
   if (requested.has("linkedin")) {
     runs.push(...(await loadSearchRuns(directus, runLimit)));
   }
@@ -201,11 +282,15 @@ async function loadSourceRuns(directus, config, sources, runLimit) {
   return runs;
 }
 
-function sourceUrls(config, source, fallback) {
+function sourceUrls(
+  config: Config,
+  source: Exclude<JobSource, "linkedin">,
+  fallback: string[]
+): string[] {
   return config.source?.[source]?.searchUrls?.length ? config.source[source].searchUrls : fallback;
 }
 
-export async function fetchSourceHtml(url) {
+export async function fetchSourceHtml(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: {
       accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -220,7 +305,7 @@ export async function fetchSourceHtml(url) {
   return response.text();
 }
 
-async function enrichJob(job) {
+async function enrichJob(job: Job): Promise<Job> {
   if (job.source === "linkedin") return enrichLinkedInJob(job);
   if (job.source === "justjoinit") return enrichJustJoinItJob(job);
   return {
@@ -229,7 +314,7 @@ async function enrichJob(job) {
   };
 }
 
-async function enrichJustJoinItJob(job) {
+async function enrichJustJoinItJob(job: Job): Promise<Job> {
   const html = await fetchSourceHtml(job.url);
   return {
     ...job,
@@ -237,7 +322,7 @@ async function enrichJustJoinItJob(job) {
   };
 }
 
-export async function enrichLinkedInJob(job) {
+export async function enrichLinkedInJob(job: Job): Promise<Job> {
   const html = await fetchSourceHtml(job.url);
   const title =
     firstText(html, [
@@ -265,10 +350,10 @@ export async function enrichLinkedInJob(job) {
   };
 }
 
-export function extractLinkedInJobs(html, run, config) {
+export function extractLinkedInJobs(html: string, run: JobSearchRun, config: Config): Job[] {
   const segments = extractJobCardSegments(html);
-  const jobs = [];
-  const seen = new Set();
+  const jobs: Job[] = [];
+  const seen = new Set<string>();
 
   for (const segment of segments) {
     const sourceId = extractJobId(segment);
@@ -301,7 +386,7 @@ export function extractLinkedInJobs(html, run, config) {
       title,
       company: company || null,
       location,
-      workplace: run.workplace || inferWorkplace(run.location),
+      workplace: mapWorkplace(run.workplace, inferWorkplace(run.location)),
       seniority: inferSeniority(title, run.query),
       language: "unknown",
       url: `https://www.linkedin.com/jobs/view/${sourceId}/`,
@@ -317,7 +402,7 @@ export function extractLinkedInJobs(html, run, config) {
   return jobs;
 }
 
-function extractJobsForRun(html, run, config) {
+function extractJobsForRun(html: string, run: JobSearchRun, config: Config): Job[] {
   if (run.source === "justjoinit") return extractJustJoinItJobs(html, run, config);
   if (run.source === "nofluffjobs") return extractNoFluffJobs(html, run, config);
   if (run.source === "weworkremotely") return extractWeWorkRemotelyJobs(html, run, config);
@@ -325,9 +410,9 @@ function extractJobsForRun(html, run, config) {
   return extractLinkedInJobs(html, run, config);
 }
 
-function extractJustJoinItJobs(html, run, config) {
+function extractJustJoinItJobs(html: string, run: JobSearchRun, config: Config): Job[] {
   const offers = extractJustJoinItOffers(html);
-  const seen = new Set();
+  const seen = new Set<string>();
   return offers
     .filter((offer) => offer?.slug && offer?.title && !seen.has(offer.slug) && seen.add(offer.slug))
     .map((offer) => {
@@ -338,8 +423,8 @@ function extractJustJoinItJobs(html, run, config) {
       const location = [offer.city, offer.street].filter(Boolean).join(", ") || run.location;
       return {
         source: "justjoinit",
-        source_id: offer.guid || offer.slug,
-        title: offer.title,
+        source_id: offer.guid || offer.slug || "",
+        title: offer.title || "",
         company: offer.companyName || null,
         location,
         workplace: mapWorkplace(offer.workplaceType, run.workplace),
@@ -348,7 +433,7 @@ function extractJustJoinItJobs(html, run, config) {
         url: `https://justjoin.it/job-offer/${offer.slug}`,
         apply_url: `https://justjoin.it/job-offer/${offer.slug}`,
         status: "new",
-        score: scoreJob({ title: offer.title, location, description: notes, run, config }),
+        score: scoreJob({ title: offer.title || "", location, description: notes, run, config }),
         salary,
         is_read: false,
         notes: notes || null
@@ -356,8 +441,8 @@ function extractJustJoinItJobs(html, run, config) {
     });
 }
 
-function extractJustJoinItOffers(html) {
-  const offers = [];
+function extractJustJoinItOffers(html: string): JustJoinItOffer[] {
+  const offers: JustJoinItOffer[] = [];
   let searchFrom = 0;
   const marker = '\\"data\\":[';
   while (true) {
@@ -381,7 +466,7 @@ function extractJustJoinItOffers(html) {
   return offers;
 }
 
-function formatJustJoinItSalary(employmentTypes = []) {
+function formatJustJoinItSalary(employmentTypes: SalaryEmploymentType[] = []): string | null {
   const paidTypes = employmentTypes.filter(
     (item) =>
       item &&
@@ -415,12 +500,12 @@ function formatJustJoinItSalary(employmentTypes = []) {
   return formatted.slice(0, 3).join("; ") || null;
 }
 
-function extractNoFluffJobs(html, run, config) {
-  const cards = [];
+function extractNoFluffJobs(html: string, run: JobSearchRun, config: Config): Job[] {
+  const cards: Job[] = [];
   const cardPattern =
     /<a\b[^>]*class="[^"]*posting-list-item[^"]*"[^>]*href="([^"]+)"[\s\S]*?<\/a>/gi;
   for (const match of html.matchAll(cardPattern)) {
-    const href = decodeHtml(match[1]);
+    const href = decodeHtml(match[1] || "");
     const segment = match[0];
     const sourceId = href.split("/").filter(Boolean).pop();
     const title = firstText(segment, [
@@ -429,7 +514,7 @@ function extractNoFluffJobs(html, run, config) {
     if (!sourceId || !title) continue;
     const company = firstText(segment, [/class="[^"]*company-name[^"]*"[^>]*>([\s\S]*?)<\/h4>/i]);
     const tags = [...segment.matchAll(/class="[^"]*posting-tag[^"]*"[^>]*>([\s\S]*?)<\/span>/gi)]
-      .map((tag) => cleanText(tag[1]))
+      .map((tag) => cleanText(tag[1] || ""))
       .filter(Boolean);
     const language = tags.some((tag) => /angielski|english/i.test(tag))
       ? "english"
@@ -448,7 +533,7 @@ function extractNoFluffJobs(html, run, config) {
       title,
       company: company || null,
       location,
-      workplace: /zdalnie|remote/i.test(location) ? "remote" : run.workplace,
+      workplace: /zdalnie|remote/i.test(location) ? "remote" : mapWorkplace(run.workplace),
       seniority: inferSeniority(title, run.query),
       language,
       url,
@@ -463,16 +548,18 @@ function extractNoFluffJobs(html, run, config) {
   return cards;
 }
 
-function extractNoFluffJobsSalary(segment) {
+function extractNoFluffJobsSalary(segment: string): string | null {
   const text = cleanText(segment).replace(/\u00a0/g, " ");
   const match = /(\d[\d\s]{1,12})\s*[–-]\s*(\d[\d\s]{1,12})\s*(PLN|EUR|USD|GBP|CHF)\b/i.exec(text);
   if (!match) return null;
-  return `${formatSalaryNumber(match[1])} - ${formatSalaryNumber(match[2])} ${match[3].toUpperCase()}`;
+  return `${formatSalaryNumber(match[1] || "")} - ${formatSalaryNumber(match[2] || "")} ${(
+    match[3] || ""
+  ).toUpperCase()}`;
 }
 
-function extractWeWorkRemotelyJobs(html, run, config) {
-  const jobs = [];
-  const seen = new Set();
+function extractWeWorkRemotelyJobs(html: string, run: JobSearchRun, config: Config): Job[] {
+  const jobs: Job[] = [];
+  const seen = new Set<string>();
   const cardPattern = /<li\b[^>]*new-listing-container[\s\S]*?<\/li>/gi;
   for (const match of html.matchAll(cardPattern)) {
     const segment = match[0];
@@ -502,7 +589,7 @@ function extractWeWorkRemotelyJobs(html, run, config) {
         /class="[^"]*new-listing__categories__category[^"]*"[^>]*>([\s\S]*?)<\/p>/gi
       )
     ]
-      .map((tag) => cleanText(tag[1]))
+      .map((tag) => cleanText(tag[1] || ""))
       .filter(Boolean);
     const url = href.startsWith("http") ? href : `https://weworkremotely.com${href}`;
     const notes = tags.join(", ");
@@ -528,9 +615,9 @@ function extractWeWorkRemotelyJobs(html, run, config) {
   return jobs;
 }
 
-function extractEuroTopTechJobs(html, run, config) {
+function extractEuroTopTechJobs(html: string, run: JobSearchRun, config: Config): Job[] {
   const cards = extractEuroTopTechCards(html);
-  const seen = new Set();
+  const seen = new Set<string>();
   return cards
     .map((card) => {
       const sourceId = stableId(
@@ -573,27 +660,29 @@ function extractEuroTopTechJobs(html, run, config) {
     });
 }
 
-function extractEuroTopTechCards(html) {
+function extractEuroTopTechCards(html: string): EuroTopTechCard[] {
   const titleMatches = [...html.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)].filter(
-    (match) => !/Explore\s+devops\s+opportunities/i.test(cleanText(match[1]))
+    (match) => !/Explore\s+devops\s+opportunities/i.test(cleanText(match[1] || ""))
   );
-  const cards = [];
+  const cards: EuroTopTechCard[] = [];
   for (let index = 0; index < titleMatches.length; index += 1) {
     const current = titleMatches[index];
+    if (!current) continue;
     const next = titleMatches[index + 1]?.index || html.length;
-    const before = html.slice(Math.max(0, current.index - 2500), current.index);
-    const after = html.slice(current.index, Math.min(html.length, next));
+    const currentIndex = current.index || 0;
+    const before = html.slice(Math.max(0, currentIndex - 2500), currentIndex);
+    const after = html.slice(currentIndex, Math.min(html.length, next));
     const segment = `${before}${after}`;
-    const title = cleanText(current[1]);
+    const title = cleanText(current[1] || "");
     const chipLabels = [
       ...before.matchAll(/class="[^"]*MuiChip-label[^"]*"[^>]*>([\s\S]*?)<\/span>/gi)
     ]
-      .map((chip) => cleanText(chip[1]))
+      .map((chip) => cleanText(chip[1] || ""))
       .filter(Boolean);
     const values = [
       ...after.matchAll(/class="[^"]*MuiTypography-body[12][^"]*"[^>]*>([\s\S]*?)<\/p>/gi)
     ]
-      .map((value) => cleanText(value[1]))
+      .map((value) => cleanText(value[1] || ""))
       .filter(Boolean);
     const location = firstText(segment, [
       /data-testid="LocationOnOutlinedIcon"[\s\S]*?<p\b[^>]*>([\s\S]*?)<\/p>/i
@@ -610,7 +699,7 @@ function extractEuroTopTechCards(html) {
   return cards;
 }
 
-function findBalancedEnd(text, start, open, close) {
+function findBalancedEnd(text: string, start: number, open: string, close: string): number {
   if (start === -1) return -1;
   let depth = 0;
   for (let index = start; index < text.length; index += 1) {
@@ -624,8 +713,8 @@ function findBalancedEnd(text, start, open, close) {
   return -1;
 }
 
-function extractJobCardSegments(html) {
-  const segments = [];
+function extractJobCardSegments(html: string): string[] {
+  const segments: string[] = [];
   const listItemPattern = /<li\b[^>]*>[\s\S]*?<\/li>/gi;
   for (const match of html.matchAll(listItemPattern)) {
     if (/\/jobs\/view\//i.test(match[0]) || /urn:li:jobPosting:/i.test(match[0])) {
@@ -649,7 +738,7 @@ function extractJobCardSegments(html) {
   return [...html.matchAll(fallbackPattern)].map((match) => match[0]);
 }
 
-function extractJobId(segment) {
+function extractJobId(segment: string): string {
   return (
     /\/jobs\/view\/[^"'?#]*?(\d+)(?:[?"'#]|$)/i.exec(segment)?.[1] ||
     /data-entity-urn="urn:li:jobPosting:(\d+)"/i.exec(segment)?.[1] ||
@@ -658,7 +747,7 @@ function extractJobId(segment) {
   );
 }
 
-function firstText(segment, patterns) {
+function firstText(segment: string, patterns: RegExp[]): string {
   for (const pattern of patterns) {
     const value = pattern.exec(segment)?.[1];
     if (value) return cleanText(value);
@@ -666,7 +755,7 @@ function firstText(segment, patterns) {
   return "";
 }
 
-function cleanText(value) {
+function cleanText(value: string): string {
   return decodeHtml(value)
     .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
     .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
@@ -675,7 +764,7 @@ function cleanText(value) {
     .trim();
 }
 
-function decodeHtml(value) {
+function decodeHtml(value: string): string {
   const named = {
     amp: "&",
     lt: "<",
@@ -687,10 +776,10 @@ function decodeHtml(value) {
   return value
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
     .replace(/&#x([a-f0-9]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
-    .replace(/&([a-z]+);/gi, (_, name) => named[name] || `&${name};`);
+    .replace(/&([a-z]+);/gi, (_, name: string) => named[name as keyof typeof named] || `&${name};`);
 }
 
-function stableId(value) {
+function stableId(value: string): string {
   let hash = 0;
   for (const char of normalize(value)) {
     hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
@@ -698,7 +787,10 @@ function stableId(value) {
   return Math.abs(hash).toString(36);
 }
 
-function formatSalaryRange(from, to) {
+function formatSalaryRange(
+  from: number | string | null | undefined,
+  to: number | string | null | undefined
+): string {
   const fromNumber = Number(from);
   const toNumber = Number(to);
   if (
@@ -715,14 +807,14 @@ function formatSalaryRange(from, to) {
   return "";
 }
 
-function formatSalaryNumber(value) {
+function formatSalaryNumber(value: number | string): string {
   const normalized = String(value).replace(/\s+/g, "");
   const number = Number(normalized);
   if (!Number.isFinite(number)) return normalized.trim();
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(number);
 }
 
-function wantedJobFilterReason(job, config) {
+function wantedJobFilterReason(job: Job, config: Config): string | null {
   const title = normalize(job.title);
   const excludes = (config.filters.excludeKeywords || []).map(normalizeKeyword).filter(Boolean);
   if (excludes.some((term) => title.includes(term))) return "excluded_keyword";
@@ -740,21 +832,21 @@ function wantedJobFilterReason(job, config) {
   return wanted.some((term) => title.includes(term)) ? null : "role_title_not_matched";
 }
 
-function enrichedJobFilterReason(job, config) {
+function enrichedJobFilterReason(job: Job, config: Config): string | null {
   if (!isAllowedLanguage(job, config)) return `language_${job.language || "unknown"}_blocked`;
   if (hasNegativeSignal(job, config)) return "negative_signal";
-  if (job.score < minimumScore(config)) return "score_below_minimum";
+  if ((job.score ?? 0) < minimumScore(config)) return "score_below_minimum";
   return null;
 }
 
-function isAllowedLanguage(job, config) {
+function isAllowedLanguage(job: Job, config: Config): boolean {
   const allowed = config.filters.allowedLanguages || ["english", "hungarian", "mixed", "unknown"];
   const blocked = config.filters.blockedLanguages || ["other"];
   if (blocked.includes(job.language)) return false;
   return allowed.includes(job.language);
 }
 
-function hasNegativeSignal(job, config) {
+function hasNegativeSignal(job: Job, config: Config): boolean {
   const title = normalize(job.title);
   const fullText = normalize(`${job.title} ${job.location || ""} ${job.notes || ""}`);
   return (config.filters.negativeSignals || [])
@@ -768,12 +860,12 @@ function hasNegativeSignal(job, config) {
     });
 }
 
-function minimumScore(config) {
+function minimumScore(config: Config): number {
   const value = Number(config.filters.minimumScore);
   return Number.isFinite(value) ? value : 45;
 }
 
-function detectLanguage(value) {
+function detectLanguage(value: string): JobLanguage {
   const text = normalize(value);
   if (!text) return "unknown";
 
@@ -853,7 +945,7 @@ function detectLanguage(value) {
   return "unknown";
 }
 
-function countMatches(text, words) {
+function countMatches(text: string, words: string[]): number {
   return words.reduce(
     // eslint-disable-next-line security/detect-non-literal-regexp -- word is escaped via escapeRegExp
     (count, word) => count + (new RegExp(`\\b${escapeRegExp(word)}\\b`, "i").test(text) ? 1 : 0),
@@ -861,11 +953,11 @@ function countMatches(text, words) {
   );
 }
 
-function escapeRegExp(value) {
+function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function scoreJob({ title, location, description = "", run, config }) {
+function scoreJob({ title, location, description = "", run, config }: ScoreInput): number {
   let score = 55;
   const titleAndLocation = normalize(`${title} ${location || ""}`);
   const fullJobText = normalize(`${title} ${location || ""} ${description || ""}`);
@@ -888,14 +980,14 @@ function scoreJob({ title, location, description = "", run, config }) {
   return Math.max(0, Math.min(100, score));
 }
 
-function matchedTerms(text, terms) {
+function matchedTerms(text: string, terms: string[]): string[] {
   return terms
     .map(normalizeKeyword)
     .filter(Boolean)
     .filter((term) => text.includes(term));
 }
 
-function inferSeniority(title, query) {
+function inferSeniority(title: string, query?: string): JobSeniority {
   const text = normalize(`${title} ${query || ""}`);
   if (/junior|entry|graduate|trainee/.test(text)) return "junior";
   if (/medior|middle|mid|associate/.test(text)) return "medior";
@@ -903,7 +995,7 @@ function inferSeniority(title, query) {
   return "unknown";
 }
 
-function mapSeniority(value, title = "") {
+function mapSeniority(value: string | undefined, title = ""): JobSeniority {
   const normalized = normalize(value);
   if (normalized === "mid" || normalized === "mid-level" || normalized === "regular")
     return "medior";
@@ -912,23 +1004,26 @@ function mapSeniority(value, title = "") {
   return inferSeniority(title, "");
 }
 
-function mapWorkplace(value, fallback = "unknown") {
+function mapWorkplace(
+  value: string | undefined,
+  fallback: JobWorkplace | string = "unknown"
+): JobWorkplace {
   const normalized = normalize(value);
   if (normalized.includes("remote")) return "remote";
   if (normalized.includes("hybrid")) return "hybrid";
   if (normalized.includes("office") || normalized.includes("onsite")) return "onsite";
-  return fallback || "unknown";
+  return (fallback || "unknown") as JobWorkplace;
 }
 
-function inferWorkplace(location) {
+function inferWorkplace(location?: string | null): JobWorkplace {
   return /remote/i.test(location || "") ? "remote" : "unknown";
 }
 
-function normalizeKeyword(value) {
+function normalizeKeyword(value: string): string {
   return normalize(String(value).replace(/^"+|"+$/g, ""));
 }
 
-function normalize(value) {
+function normalize(value: unknown): string {
   return String(value || "")
     .toLowerCase()
     .replace(/\s+/g, " ")

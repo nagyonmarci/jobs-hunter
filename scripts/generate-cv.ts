@@ -2,18 +2,29 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import puppeteer from "puppeteer";
 import { mdToPdf } from "md-to-pdf";
-import { createDirectusClient } from "./directus-client.mjs";
+import { createDirectusClient } from "./directus-client.js";
 
-async function takeScreenshot(url, outputPath) {
+interface AppSettings {
+  preferred_llm?: string;
+  openai_api_key?: string;
+  anthropic_api_key?: string;
+  gemini_api_key?: string;
+}
+
+interface JobLead {
+  url: string;
+  description?: string | null;
+}
+
+async function takeScreenshot(url: string, outputPath: string): Promise<void> {
   const browser = await puppeteer.launch({
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    headless: "new"
+    headless: true
   });
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 1024 });
     await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-    // wait a bit for dynamic content
     await new Promise((resolve) => setTimeout(resolve, 3000));
     await page.screenshot({ path: outputPath, fullPage: true });
   } finally {
@@ -21,7 +32,7 @@ async function takeScreenshot(url, outputPath) {
   }
 }
 
-async function extractTextFromScreenshot(imagePath, apiKey) {
+async function extractTextFromScreenshot(imagePath: string, apiKey: string): Promise<string> {
   const { OpenAI } = await import("openai");
   const openai = new OpenAI({ apiKey });
   const base64 = (await fs.readFile(imagePath)).toString("base64");
@@ -40,10 +51,10 @@ async function extractTextFromScreenshot(imagePath, apiKey) {
       }
     ]
   });
-  return response.choices[0].message.content;
+  return response.choices[0]?.message.content ?? "";
 }
 
-async function callLLM(prompt, settings) {
+async function callLLM(prompt: string, settings: AppSettings): Promise<string> {
   const provider = settings.preferred_llm || "openai";
 
   if (provider === "openai") {
@@ -53,7 +64,7 @@ async function callLLM(prompt, settings) {
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }]
     });
-    return response.choices[0].message.content;
+    return response.choices[0]?.message.content ?? "";
   } else if (provider === "anthropic") {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const anthropic = new Anthropic({ apiKey: settings.anthropic_api_key });
@@ -62,33 +73,42 @@ async function callLLM(prompt, settings) {
       max_tokens: 4000,
       messages: [{ role: "user", content: prompt }]
     });
-    return response.content[0].text;
+    const textBlock = response.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text")
+      throw new Error("No text block in Anthropic response");
+    return textBlock.text;
   } else if (provider === "gemini") {
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey: settings.gemini_api_key });
-    const response = await ai.models.generateContent({
+    const result = await ai.models.generateContent({
       model: "gemini-2.5-pro",
       contents: prompt
     });
-    return response.text;
+    return result.text ?? "";
   } else {
     throw new Error(`Unsupported LLM provider: ${provider}`);
   }
 }
 
-export async function processCvGeneration(jobId) {
+export async function processCvGeneration(jobId: string): Promise<{
+  success: boolean;
+  markdown: string;
+  fileId: string | null;
+}> {
   const directus = await createDirectusClient();
-  // 1. Fetch job lead
-  const { data: job } = await directus.request(`/items/job_leads/${jobId}`);
+
+  const { data: job } = (await directus.request(`/items/job_leads/${jobId}`)) as {
+    data: JobLead | null;
+  };
   if (!job) throw new Error("Job not found");
 
-  // 2. Fetch App Settings
-  const { data: settings } = await directus.request(`/items/app_settings`);
+  const { data: settings } = (await directus.request(`/items/app_settings`)) as {
+    data: AppSettings | null;
+  };
   if (!settings) throw new Error("App settings not configured");
 
   let description = job.description;
 
-  // 3. If no description, take screenshot and extract via markitdown
   if (!description) {
     if (!settings.openai_api_key) {
       throw new Error(
@@ -99,13 +119,11 @@ export async function processCvGeneration(jobId) {
     await takeScreenshot(job.url, screenshotPath);
     description = await extractTextFromScreenshot(screenshotPath, settings.openai_api_key);
 
-    // Save extracted description to job lead
     await directus.request(`/items/job_leads/${jobId}`, {
       method: "PATCH",
       body: JSON.stringify({ description })
     });
 
-    // Cleanup screenshot
     try {
       await fs.unlink(screenshotPath);
     } catch {
@@ -113,13 +131,13 @@ export async function processCvGeneration(jobId) {
     }
   }
 
-  // 4. Fetch Base CV
-  const { data: baseCv } = await directus.request(`/items/base_cv`);
-  if (!baseCv || !baseCv.content) {
+  const { data: baseCv } = (await directus.request(`/items/base_cv`)) as {
+    data: { content?: string } | null;
+  };
+  if (!baseCv?.content) {
     throw new Error("Base CV not found. Please add your master CV to the base_cv collection.");
   }
 
-  // 5. Generate ATS Optimized CV
   const prompt = `You are an expert ATS-optimized CV writer.
 I will provide you with a Master CV and a Job Description.
 Please rewrite the Master CV to highlight the skills and experiences that are most relevant to the Job Description.
@@ -135,38 +153,26 @@ ${description}
 
   const generatedMarkdown = await callLLM(prompt, settings);
 
-  // 6. Convert Markdown to PDF and upload
-  const pdfBuffer = await mdToPdf({ content: generatedMarkdown }).catch(console.error);
+  const pdfResult = await mdToPdf({ content: generatedMarkdown }).catch(console.error);
 
-  // 7. Upload PDF to Directus Files
-  let fileId = null;
-  if (pdfBuffer) {
+  let fileId: string | null = null;
+  if (pdfResult) {
     const formData = new FormData();
-    const blob = new Blob([pdfBuffer.content], { type: "application/pdf" });
+    const blob = new Blob([new Uint8Array(pdfResult.content)], { type: "application/pdf" });
     formData.append("file", blob, `cv-${jobId}.pdf`);
 
-    // Wait, node-fetch/undici supports FormData, but let's use manual upload or the simpler base64 via API
-    // Actually directus REST API /files accepts multipart/form-data.
     const uploadRes = await fetch(`${process.env.DIRECTUS_URL}/files`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.DIRECTUS_TOKEN}`
-      },
+      headers: { Authorization: `Bearer ${process.env.DIRECTUS_TOKEN}` },
       body: formData
     });
-    const uploadData = await uploadRes.json();
-    if (uploadData.data && uploadData.data.id) {
-      fileId = uploadData.data.id;
-    }
+    const uploadData = (await uploadRes.json()) as { data?: { id?: string } };
+    fileId = uploadData.data?.id ?? null;
   }
 
-  // 8. Update Job Lead with Generated CV
   await directus.request(`/items/job_leads/${jobId}`, {
     method: "PATCH",
-    body: JSON.stringify({
-      generated_cv: generatedMarkdown,
-      generated_cv_pdf: fileId
-    })
+    body: JSON.stringify({ generated_cv: generatedMarkdown, generated_cv_pdf: fileId })
   });
 
   return { success: true, markdown: generatedMarkdown, fileId };

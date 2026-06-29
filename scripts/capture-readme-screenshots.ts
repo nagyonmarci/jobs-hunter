@@ -85,8 +85,8 @@ const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${chrome
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 1 });
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const waitForText = (text, timeout = 15000) =>
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const waitForText = (text: string, timeout = 15000) =>
   page.waitForFunction(`(t) => document.body?.innerText?.includes(t)`, { timeout }, text);
 
 const loginScript = `

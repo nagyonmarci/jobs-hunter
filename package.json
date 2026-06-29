@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "provision:directus": "node --env-file=.env scripts/provision-directus.mjs",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "provision:directus": "node --env-file=.env --import tsx/esm scripts/provision-directus.ts",
     "admin": "python3 -m http.server 4173 --directory public",
-    "search:linkedin": "node --env-file=.env scripts/generate-linkedin-searches.mjs",
-    "search:linkedin:dry": "node --env-file=.env scripts/generate-linkedin-searches.mjs --dry-run",
-    "import:linkedin": "node --env-file=.env scripts/import-linkedin-jobs.mjs",
-    "import:linkedin:dry": "node --env-file=.env scripts/import-linkedin-jobs.mjs --dry-run",
-    "ingest:jobs": "node --env-file=.env scripts/ingest-jobs.mjs data/jobs.sample.json",
+    "search:linkedin": "node --env-file=.env --import tsx/esm scripts/generate-linkedin-searches.ts",
+    "search:linkedin:dry": "node --env-file=.env --import tsx/esm scripts/generate-linkedin-searches.ts --dry-run",
+    "import:linkedin": "node --env-file=.env --import tsx/esm scripts/linkedin-importer.ts",
+    "import:linkedin:dry": "node --env-file=.env --import tsx/esm scripts/linkedin-importer.ts --dry-run",
+    "ingest:jobs": "node --env-file=.env --import tsx/esm scripts/ingest-jobs.ts data/jobs.sample.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -22,25 +24,31 @@
     "prepare": "husky"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19"
   },
   "devDependencies": {
-    "@eslint/js": "^9.17.0",
-    "@vitest/coverage-v8": "^2.1.8",
-    "eslint": "^9.17.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-n": "^17.15.1",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.9.1",
+    "@typescript-eslint/eslint-plugin": "^8.60.0",
+    "@typescript-eslint/parser": "^8.60.0",
+    "@vitest/coverage-v8": "^4.1.9",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-n": "^18.1.0",
     "eslint-plugin-promise": "^7.2.1",
-    "eslint-plugin-security": "^3.0.1",
-    "globals": "^15.14.0",
+    "eslint-plugin-security": "^4.0.1",
+    "fast-check": "^4.8.0",
+    "globals": "^17.6.0",
     "husky": "^9.1.7",
-    "lint-staged": "^15.2.11",
-    "prettier": "^3.4.2",
-    "semantic-release": "^24.2.1",
-    "vitest": "^2.1.8"
+    "lint-staged": "^17.0.7",
+    "prettier": "^3.8.4",
+    "semantic-release": "^25.0.5",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   },
   "lint-staged": {
-    "*.{js,mjs,cjs}": [
+    "*.{js,mjs,cjs,ts}": [
       "eslint --fix",
       "prettier --write"
     ],

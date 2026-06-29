@@ -1,6 +1,7 @@
 import http from "node:http";
-import { importLinkedInJobs } from "./linkedin-importer.mjs";
-import { createDirectusClient } from "./directus-client.mjs";
+import { importLinkedInJobs } from "./import-linkedin-jobs.js";
+import { createDirectusClient } from "./directus-client.js";
+import type { ImportOptions } from "./types.js";
 
 const EXPIRE_AFTER_DAYS = Number(process.env.EXPIRE_AFTER_DAYS || 30);
 const EXPIRE_CHECK_MS = Number(process.env.EXPIRE_CHECK_INTERVAL_HOURS || 24) * 3_600_000;
@@ -30,7 +31,7 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "POST" && request.url === "/import-linkedin-jobs") {
     try {
-      const body = await readJsonBody(request);
+      const body = (await readJsonBody(request)) as ImportOptions;
       const summary = await importLinkedInJobs({
         sources: body.sources || ["linkedin"],
         runLimit: Number(body.runLimit) > 0 ? Number(body.runLimit) : 25,
@@ -40,26 +41,26 @@ const server = http.createServer(async (request, response) => {
       });
       sendJson(response, 200, summary);
     } catch (error) {
-      sendJson(response, 500, { error: error.message });
+      sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
     }
     return;
   }
 
   if (request.method === "POST" && request.url === "/generate-cv") {
     try {
-      const body = await readJsonBody(request);
+      const body = (await readJsonBody(request)) as { jobId?: string };
       if (!body.jobId) {
         return sendJson(response, 400, { error: "jobId is required" });
       }
 
       // Dynamic import to avoid loading Puppeteer and heavy LLM libs until needed
-      const { processCvGeneration } = await import("./generate-cv.mjs");
+      const { processCvGeneration } = await import("./generate-cv.js");
       const result = await processCvGeneration(body.jobId);
 
       sendJson(response, 200, result);
     } catch (error) {
       console.error(error);
-      sendJson(response, 500, { error: error.message });
+      sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
     }
     return;
   }
@@ -69,7 +70,7 @@ const server = http.createServer(async (request, response) => {
       const result = await expireStaleJobs();
       sendJson(response, 200, result);
     } catch (error) {
-      sendJson(response, 500, { error: error.message });
+      sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
     }
     return;
   }
@@ -93,41 +94,46 @@ server.listen(port, async () => {
   console.log(`LinkedIn importer listening on http://0.0.0.0:${port}`);
   try {
     const d = await createDirectusClient();
-    const { data } = await d.request("/items/app_settings");
+    const { data } = (await d.request("/items/app_settings")) as {
+      data?: { cors_origin?: string };
+    };
     if (data?.cors_origin) corsOrigin = data.cors_origin;
   } catch (e) {
-    console.warn("Could not load cors_origin from app_settings:", e.message);
+    console.warn(
+      "Could not load cors_origin from app_settings:",
+      e instanceof Error ? e.message : String(e)
+    );
   }
   setTimeout(() => scheduledRun().catch(console.error), 60_000);
   setInterval(() => scheduledRun().catch(console.error), EXPIRE_CHECK_MS);
 });
 
-function setCorsHeaders(response) {
+function setCorsHeaders(response: http.ServerResponse): void {
   response.setHeader("access-control-allow-origin", corsOrigin);
   response.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
   response.setHeader("access-control-allow-headers", "content-type");
 }
 
-function sendJson(response, status, payload) {
+function sendJson(response: http.ServerResponse, status: number, payload: unknown): void {
   response.writeHead(status, { "content-type": "application/json" });
   response.end(JSON.stringify(payload));
 }
 
-async function readJsonBody(request) {
+async function readJsonBody(request: http.IncomingMessage): Promise<unknown> {
   let raw = "";
-  for await (const chunk of request) raw += chunk;
+  for await (const chunk of request) raw += String(chunk);
   return raw ? JSON.parse(raw) : {};
 }
 
-async function expireStaleJobs() {
+async function expireStaleJobs(): Promise<{ expired: number }> {
   const directus = await createDirectusClient();
   const cutoff = new Date(Date.now() - EXPIRE_AFTER_DAYS * 86_400_000).toISOString();
 
-  const { data: jobs } = await directus.request(
+  const { data: jobs } = (await directus.request(
     "/items/job_leads?filter[is_expired][_neq]=true&fields=id,source,url,date_created&limit=-1"
-  );
+  )) as { data: Array<{ id: string; source: string; url: string; date_created: string }> };
 
-  const toExpire = [];
+  const toExpire: string[] = [];
 
   for (const job of jobs) {
     if (job.source !== "linkedin") {

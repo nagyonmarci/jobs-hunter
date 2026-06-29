@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
 
-This is a small, dependency-free Node.js starter for tracking DevOps/SRE/Platform job leads in Directus.
+This is a small, runtime dependency-free TypeScript/Node.js starter for tracking DevOps/SRE/Platform job leads in Directus.
 
 It does not scrape LinkedIn behind login. Instead it:
 
@@ -175,7 +175,7 @@ To refresh these screenshots locally, start a Chrome instance with remote debugg
 
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --headless=new --remote-debugging-port=9223 --user-data-dir=/tmp/jobs-hunter-chrome --window-size=1440,1000 about:blank
-node scripts/capture-readme-screenshots.mjs
+node --import tsx/esm scripts/capture-readme-screenshots.ts
 ```
 
 ## Local static admin fallback
@@ -272,7 +272,7 @@ npm run import:linkedin:dry -- --run-limit=1 --max-jobs-per-run=5
 Inside Docker:
 
 ```bash
-docker compose run --rm --entrypoint node directus-tools scripts/import-linkedin-jobs.mjs --run-limit=25 --max-jobs-per-run=25
+docker compose run --rm --entrypoint node directus-tools scripts/linkedin-importer.js --run-limit=25 --max-jobs-per-run=25
 ```
 
 ## Stop the stack
@@ -292,7 +292,7 @@ docker compose down -v
 Create a JSON file like [data/jobs.sample.json](data/jobs.sample.json), then:
 
 ```bash
-node scripts/ingest-jobs.mjs data/jobs.sample.json
+npm run ingest:jobs
 ```
 
 Statuses to use:
@@ -319,6 +319,7 @@ Common tasks:
 
 ```bash
 npm run lint           # ESLint
+npm run typecheck      # TypeScript
 npm run format         # Prettier (write)
 npm run format:check   # Prettier (verify)
 npm test               # Vitest (watch)
@@ -342,7 +343,7 @@ Build either target locally:
 
 ```bash
 docker build --target app -t jobs-hunter-app:dev .
-docker run --rm jobs-hunter-app:dev scripts/generate-linkedin-searches.mjs --dry-run
+docker run --rm jobs-hunter-app:dev scripts/generate-linkedin-searches.js --dry-run
 
 docker build --target admin -t jobs-hunter-admin:dev .
 docker run --rm -p 8080:80 jobs-hunter-admin:dev   # http://localhost:8080/admin.html
