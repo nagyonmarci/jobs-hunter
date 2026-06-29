@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
 
-This is a small, runtime dependency-free TypeScript/Node.js starter for tracking DevOps/SRE/Platform job leads in Directus.
+This is a small TypeScript/Node.js tool for tracking DevOps/SRE/Platform job leads in Directus.
 
 It does not scrape LinkedIn behind login. Instead it:
 
@@ -130,7 +130,8 @@ The admin UI lets you:
 - manually add reviewed job leads,
 - review job leads with search, per-field filters, salary filtering, sorting, and read/unread marking,
 - filter out expired listings (hidden by default), manually mark individual leads as expired,
-- trigger expiry detection across all leads via **Detect expired** (URL 404 check for non-LinkedIn sources, time-based fallback via `EXPIRE_AFTER_DAYS`, default 30).
+- trigger expiry detection across all leads via **Detect expired** (URL 404 check for non-LinkedIn sources, time-based fallback via `EXPIRE_AFTER_DAYS`, default 30),
+- generate an ATS-optimised, role-tailored CV for a selected lead via **Generate CV** (see [CV generation](#cv-generation)).
 
 For browser writes, create a Directus static token:
 
@@ -177,6 +178,30 @@ To refresh these screenshots locally, start a Chrome instance with remote debugg
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --headless=new --remote-debugging-port=9223 --user-data-dir=/tmp/jobs-hunter-chrome --window-size=1440,1000 about:blank
 node --import tsx/esm scripts/capture-readme-screenshots.ts
 ```
+
+## CV generation
+
+The admin UI includes a **Generate CV** button on each job lead. It:
+
+1. screenshots the job posting URL with Puppeteer if no description is stored yet,
+2. extracts visible text via OpenAI Vision (GPT-4o),
+3. reads your master CV from the `base_cv` Directus collection,
+4. calls the configured LLM to produce an ATS-optimised, role-tailored CV in Markdown,
+5. converts it to PDF and uploads it to Directus Files.
+
+**Requirements:**
+
+- Add your master CV text to the `base_cv` collection (`content` field).
+- Create an `app_settings` collection with these fields:
+
+  | Field               | Description                                |
+  | ------------------- | ------------------------------------------ |
+  | `preferred_llm`     | `openai`, `anthropic`, or `gemini`         |
+  | `openai_api_key`    | required for GPT-4o Vision text extraction |
+  | `anthropic_api_key` | required when `preferred_llm = anthropic`  |
+  | `gemini_api_key`    | required when `preferred_llm = gemini`     |
+
+The generated CV (Markdown + PDF) is stored on the job lead record and accessible from the Directus Files panel.
 
 ## Local static admin fallback
 
@@ -369,7 +394,8 @@ request.
 
 OSSF Scorecard runs weekly and on every push to `main`. Dependabot opens
 weekly updates for npm packages, GitHub Actions, and the Dockerfile base
-image.
+image; patch and minor updates are auto-merged once CI passes, major updates
+require manual review.
 
 ## Releases
 
