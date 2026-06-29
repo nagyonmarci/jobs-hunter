@@ -60,7 +60,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, result);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
-      sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+      sendJson(response, 500, { error: "CV generation failed" });
     }
     return;
   }
