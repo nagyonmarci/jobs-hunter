@@ -9,7 +9,7 @@ import tsPlugin from "@typescript-eslint/eslint-plugin";
 
 export default [
   {
-    ignores: ["node_modules/", "coverage/", "dist/", "public/"]
+    ignores: ["node_modules/", "coverage/", "dist/", "public/*.js"]
   },
   js.configs.recommended,
   n.configs["flat/recommended-module"],
@@ -42,10 +42,18 @@ export default [
     },
     plugins: { "@typescript-eslint": tsPlugin },
     rules: {
-      ...tsPlugin.configs.recommended.rules,
+      ...tsPlugin.configs["recommended"]!.rules,
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       "no-unused-vars": "off"
+    }
+  },
+  {
+    files: ["public/admin.ts"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: { project: "./tsconfig.browser.json" },
+      globals: { ...globals.browser }
     }
   },
   {
