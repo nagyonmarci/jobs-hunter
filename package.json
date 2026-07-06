@@ -64,6 +64,6 @@
     "@google/genai": "^2.10.0",
     "md-to-pdf": "^5.2.5",
     "openai": "^6.45.0",
-    "puppeteer": "^25.2.1"
+    "puppeteer": "^25.3.0"
   }
 }
