@@ -10,7 +10,7 @@ COPY public ./public
 RUN npx tsc && npx tsc -p tsconfig.browser.json
 
 # Static admin UI served by nginx (build target: admin)
-FROM nginx:1.31-alpine@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa AS admin
+FROM nginx:1.31-alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752 AS admin
 COPY --from=build /app/public /usr/share/nginx/html
 COPY nginx/admin.conf /etc/nginx/conf.d/default.conf
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
