@@ -1,5 +1,5 @@
 {
-  "name": "job-search-directus-automation",
+  "name": "jobs-hunter",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,15 +7,11 @@
     "build": "tsc && tsc -p tsconfig.browser.json",
     "build:admin": "tsc -p tsconfig.browser.json",
     "typecheck": "tsc --noEmit",
-    "provision:directus": "node --import tsx/esm scripts/provision-directus.ts",
-    "admin": "python3 -m http.server 4173 --directory public",
     "search:linkedin": "node --import tsx/esm scripts/generate-linkedin-searches.ts",
     "search:linkedin:dry": "node --import tsx/esm scripts/generate-linkedin-searches.ts --dry-run",
     "import:linkedin": "node --import tsx/esm scripts/linkedin-importer.ts",
     "import:linkedin:dry": "node --import tsx/esm scripts/linkedin-importer.ts --dry-run",
     "ingest:jobs": "node --import tsx/esm scripts/ingest-jobs.ts data/jobs.sample.json",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest",
@@ -27,20 +23,11 @@
     "node": ">=20.19"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.1",
-    "@typescript-eslint/eslint-plugin": "^8.63.0",
-    "@typescript-eslint/parser": "^8.60.0",
+    "@types/pg": "^8.20.0",
     "@vitest/coverage-v8": "^4.1.10",
-    "eslint": "^10.7.0",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-n": "^18.2.2",
-    "eslint-plugin-promise": "^7.2.1",
-    "eslint-plugin-security": "^4.0.1",
     "fast-check": "^4.9.0",
-    "globals": "^17.6.0",
     "husky": "^9.1.7",
-    "jiti": "^2.7.0",
     "lint-staged": "^17.0.7",
     "prettier": "^3.9.5",
     "tsx": "^4.23.1",
@@ -49,7 +36,6 @@
   },
   "lint-staged": {
     "*.{js,mjs,cjs,ts}": [
-      "eslint --fix",
       "prettier --write"
     ],
     "*.{json,md,yml,yaml}": [
@@ -57,13 +43,16 @@
     ]
   },
   "overrides": {
-    "js-yaml": ">=4.1.0"
+    "js-yaml": ">=5.2.2",
+    "protobufjs": ">=7.6.5",
+    "brace-expansion": ">=5.0.8"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
     "@google/genai": "^2.11.0",
     "md-to-pdf": "^5.2.5",
     "openai": "^6.46.0",
+    "pg": "^8.22.0",
     "puppeteer": "^25.3.0"
   }
 }

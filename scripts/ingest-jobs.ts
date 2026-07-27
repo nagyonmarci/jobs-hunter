@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { createDirectusClient, findExistingByUrl } from "./directus-client.js";
+import { createJobLead, findJobLeadByUrl } from "./db.js";
 import type { Job } from "./types.js";
 
 const inputPath = process.argv[2];
@@ -7,7 +7,6 @@ if (!inputPath) {
   throw new Error("Usage: node --import tsx/esm scripts/ingest-jobs.ts data/jobs.json");
 }
 
-const directus = await createDirectusClient();
 const jobs = JSON.parse(await fs.readFile(inputPath, "utf8")) as Job[];
 
 function required(value: string | null | undefined, name: string): string {
@@ -37,16 +36,13 @@ for (const job of jobs) {
     notes: job.notes || null
   };
 
-  const existing = await findExistingByUrl(directus, payload.url);
+  const existing = await findJobLeadByUrl(payload.url);
   if (existing) {
     skipped += 1;
     continue;
   }
 
-  await directus.request("/items/job_leads", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  await createJobLead(payload);
   created += 1;
 }
 

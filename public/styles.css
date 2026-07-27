@@ -127,20 +127,6 @@ fieldset {
   padding: 12px;
 }
 
-.login-box {
-  margin: 4px 0 14px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #f9fbfb;
-}
-
-.login-box p {
-  margin: 0 0 10px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
 legend {
   padding: 0 6px;
 }

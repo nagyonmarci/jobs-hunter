@@ -6,6 +6,8 @@ updates:
       interval: weekly
       day: monday
       time: "06:00"
+    cooldown:
+      default-days: 4
     open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(deps)"
@@ -13,17 +15,6 @@ updates:
     groups:
       ai-sdks:
         patterns: ["@anthropic-ai/*", "@google/genai", "openai"]
-      linting:
-        dependency-type: development
-        patterns:
-          [
-            "eslint*",
-            "@eslint/*",
-            "@typescript-eslint/*",
-            "eslint-plugin-*",
-            "eslint-config-*",
-            "globals"
-          ]
       testing:
         dependency-type: development
         patterns: ["vitest", "@vitest/*", "fast-check"]
@@ -40,6 +31,8 @@ updates:
       interval: weekly
       day: monday
       time: "06:00"
+    cooldown:
+      default-days: 4
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(actions)"
@@ -53,6 +46,8 @@ updates:
       interval: weekly
       day: monday
       time: "06:00"
+    cooldown:
+      default-days: 4
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(docker)"

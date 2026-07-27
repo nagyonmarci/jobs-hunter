@@ -9,7 +9,7 @@
   <body>
     <header class="topbar">
       <div>
-        <p class="eyebrow">Directus job search automation</p>
+        <p class="eyebrow">Job search automation</p>
         <h1>Job Search Admin</h1>
       </div>
       <div class="status" id="connectionStatus">Loading...</div>
@@ -29,32 +29,6 @@
               <p>Stored locally in this browser.</p>
             </div>
             <button type="button" class="secondary" id="testConnection">Test</button>
-          </div>
-
-          <label>
-            Directus URL
-            <input id="directusUrl" type="url" placeholder="http://localhost:8055">
-          </label>
-
-          <label>
-            Static token
-            <input id="directusToken" type="password" placeholder="Directus static token">
-          </label>
-
-          <div class="login-box">
-            <p>Or login with Directus admin credentials.</p>
-            <label>
-              Email
-              <input id="directusEmail" type="email" placeholder="admin@example.com">
-            </label>
-            <label>
-              Password
-              <input id="directusPassword" type="password" placeholder="Directus password">
-            </label>
-            <label class="check">
-              <input type="checkbox" id="rememberLogin">
-              Remember login on this browser
-            </label>
           </div>
 
           <div class="panel-header" style="margin-top: 1rem;">
@@ -88,9 +62,21 @@
             <input id="geminiApiKey" type="password" placeholder="AIza...">
           </label>
 
+          <div class="panel-header" style="margin-top: 1rem;">
+            <div>
+              <h2>Base CV</h2>
+              <p>Your master resume, used as the source for generated CVs.</p>
+            </div>
+          </div>
+
+          <label>
+            Base CV content
+            <textarea id="baseCv" rows="12"></textarea>
+          </label>
+
           <div class="button-row">
             <button type="button" id="saveSettings">Save settings</button>
-            <button type="button" class="secondary" id="loginDirectus">Login</button>
+            <button type="button" class="secondary" id="saveBaseCv">Save base CV</button>
             <button type="button" class="secondary" id="clearSettings">Clear</button>
           </div>
         </section>
@@ -172,7 +158,7 @@
 
           <div class="button-row">
             <button type="button" id="generateSearches">Generate URLs</button>
-            <button type="button" class="secondary" id="saveRuns">Save runs to Directus</button>
+            <button type="button" class="secondary" id="saveRuns">Save runs</button>
             <button type="button" class="secondary" id="openAll">Open all</button>
           </div>
         </section>

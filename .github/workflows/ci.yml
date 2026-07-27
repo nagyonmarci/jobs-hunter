@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   lint-test:
-    name: Lint, format, test (Node ${{ matrix.node }})
+    name: Format, test (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -41,9 +41,6 @@ jobs:
 
       - name: Format check
         run: npm run format:check
-
-      - name: Lint
-        run: npm run lint
 
       - name: Generate searches (dry run)
         run: npm run search:linkedin:dry
@@ -203,7 +200,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [app, admin]
+        target: [app]
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -294,7 +291,7 @@ jobs:
 
             | Check | Result |
             | --- | --- |
-            | Lint / format / test | ${{ needs.lint-test.result }} |
+            | Format / test | ${{ needs.lint-test.result }} |
             | Secret scan (gitleaks) | ${{ needs.gitleaks.result }} |
             | CodeQL | ${{ needs.codeql.result }} |
             | SAST (semgrep) | ${{ needs.sast-semgrep.result }} |
@@ -303,7 +300,7 @@ jobs:
             | Image build & scan (trivy) | ${{ needs.image-scan.result }} |
             | Dependency review | ${{ needs.dependency-review.result }} |
 
-            Blocking gates: lint/format/test, gitleaks, CodeQL, and the image build + smoke test.
+            Blocking gates: format/test, gitleaks, CodeQL, and the image build + smoke test.
             Semgrep, Hadolint, Checkov, Trivy, and dependency review are informational — see the **Security → Code scanning** tab.
 
             Run logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

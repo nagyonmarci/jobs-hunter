@@ -1,11 +1,6 @@
 const storageKey = "job-search-admin-settings";
-const authSessionKey = "job-search-admin-auth-session";
-const importerUrl = "http://localhost:4180";
 
 interface Defaults {
-  directusUrl: string;
-  directusToken: string;
-  directusEmail: string;
   keywords: string[];
   excludeKeywords: string[];
   positiveTech: string[];
@@ -24,13 +19,6 @@ interface Settings extends Defaults {
   openaiApiKey?: string;
   anthropicApiKey?: string;
   geminiApiKey?: string;
-}
-
-interface AuthSession {
-  access_token: string;
-  refresh_token: string;
-  expires: number;
-  persistent: boolean;
 }
 
 interface JobLead {
@@ -61,9 +49,6 @@ interface SearchRow {
 }
 
 const defaults: Defaults = {
-  directusUrl: "http://localhost:8055",
-  directusToken: "",
-  directusEmail: "admin@example.com",
   keywords: [
     "\"DevOps Engineer\"",
     "\"Site Reliability Engineer\"",
@@ -175,28 +160,20 @@ function saveSettingsToStorage(): void {
   const settings = readSettingsFromForm();
   localStorage.setItem(storageKey, JSON.stringify(settings)); // codeql[js/clear-text-storage-of-sensitive-data] -- intentional: self-hosted tool, user-owned keys
 
-  // Also save LLM settings to Directus so the backend can use them
-  if (hasConnectionCredential()) {
-    directusRequest("/items/app_settings", {
-      method: "PATCH",
-      body: JSON.stringify({
-        preferred_llm: settings.preferredLlm,
-        openai_api_key: settings.openaiApiKey,
-        anthropic_api_key: settings.anthropicApiKey,
-        gemini_api_key: settings.geminiApiKey
-      })
-    }).catch(console.error);
-  }
+  apiFetch("/api/app-settings", {
+    method: "PATCH",
+    body: JSON.stringify({
+      preferred_llm: settings.preferredLlm,
+      openai_api_key: settings.openaiApiKey,
+      anthropic_api_key: settings.anthropicApiKey,
+      gemini_api_key: settings.geminiApiKey
+    })
+  }).catch(console.error);
 
-  showToast("Settings saved locally & to Directus.");
+  showToast("Settings saved.");
 }
 
 function applySettings(settings: Settings): void {
-  $input("directusUrl").value = settings.directusUrl || "";
-  $input("directusToken").value = settings.directusToken || "";
-  $input("directusEmail").value = settings.directusEmail || defaults.directusEmail;
-  $input("directusPassword").value = "";
-
   const llmEl = document.getElementById("preferredLlm") as HTMLSelectElement | null;
   if (llmEl) llmEl.value = settings.preferredLlm || "openai";
   const openaiEl = document.getElementById("openaiApiKey") as HTMLInputElement | null;
@@ -226,34 +203,7 @@ function applySettings(settings: Settings): void {
     input.checked = (settings.experienceLevels || defaults.experienceLevels).includes(input.value);
   });
 
-  updateInitialConnectionStatus();
-  syncRememberLoginCheckbox();
-  if (hasConnectionCredential()) {
-    setTimeout(() => testConnection(), 0);
-  }
-}
-
-function updateInitialConnectionStatus(): void {
-  const status = $("connectionStatus");
-  if (hasConnectionCredential()) {
-    status.className = "status";
-    status.textContent = "Test needed";
-  } else {
-    status.className = "status";
-    status.textContent = "Login required";
-  }
-}
-
-function hasConnectionCredential(): boolean {
-  const { directusToken } = readSettingsFromForm();
-  const auth = getStoredAuthSession();
-  return Boolean(directusToken || auth?.access_token);
-}
-
-function syncRememberLoginCheckbox(): void {
-  const remember = document.getElementById("rememberLogin") as HTMLInputElement | null;
-  if (!remember) return;
-  remember.checked = Boolean(getStoredAuthSession()?.persistent);
+  testConnection().catch(() => {});
 }
 
 function readSettingsFromForm(): Settings {
@@ -262,9 +212,6 @@ function readSettingsFromForm(): Settings {
   const anthropicEl = document.getElementById("anthropicApiKey") as HTMLInputElement | null;
   const geminiEl = document.getElementById("geminiApiKey") as HTMLInputElement | null;
   return {
-    directusUrl: $input("directusUrl").value.trim().replace(/\/$/, ""),
-    directusToken: $input("directusToken").value.trim(),
-    directusEmail: $input("directusEmail").value.trim(),
     preferredLlm: llmEl ? llmEl.value : "openai",
     openaiApiKey: openaiEl ? openaiEl.value.trim() : "",
     anthropicApiKey: anthropicEl ? anthropicEl.value.trim() : "",
@@ -294,123 +241,33 @@ function hoursToPostedWithin(value: string): string {
   return `r${hours * 3600}`;
 }
 
-async function directusRequest(path: string, options: RequestInit = {}, retry = true): Promise<unknown> {
-  const { directusUrl, directusToken } = readSettingsFromForm();
-  const accessToken = directusToken || getStoredAuthSession()?.access_token || "";
-  if (!directusUrl || !accessToken) {
-    throw new Error("Directus URL and token/login are required.");
-  }
-
-  const response = await fetch(`${directusUrl}${path}`, {
+async function apiFetch(path: string, options: RequestInit = {}): Promise<unknown> {
+  const response = await fetch(path, {
     ...options,
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${accessToken}`,
       ...((options.headers as Record<string, string>) || {})
     }
   });
-
   const text = await response.text();
-  const body = text ? (JSON.parse(text) as Record<string, unknown>) : null;
-
-  if (response.status === 401 && retry && !directusToken && getStoredAuthSession()?.refresh_token) {
-    await refreshDirectusToken();
-    return directusRequest(path, options, false);
-  }
-
+  const body = text ? (JSON.parse(text) as { error?: string }) : null;
   if (!response.ok) {
-    const errors = body?.errors as Array<{ message: string }> | undefined;
-    const message = errors?.[0]?.message || response.statusText;
-    throw new Error(`${response.status}: ${message}`);
+    throw new Error(body?.error || response.statusText);
   }
-
   return body;
 }
 
-async function loginDirectus(): Promise<void> {
-  const status = $("connectionStatus");
-  status.className = "status";
-  status.textContent = "Logging in...";
+async function loadBaseCv(): Promise<void> {
+  const body = (await apiFetch("/api/base-cv")) as { content?: string } | null;
+  $input("baseCv").value = body?.content || "";
+}
 
-  const { directusUrl, directusEmail } = readSettingsFromForm();
-  const password = $input("directusPassword").value;
-
-  if (!directusUrl || !directusEmail || !password) {
-    throw new Error("Directus URL, email, and password are required for login.");
-  }
-
-  const response = await fetch(`${directusUrl}/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      email: directusEmail,
-      password,
-      mode: "json"
-    })
+async function saveBaseCv(): Promise<void> {
+  await apiFetch("/api/base-cv", {
+    method: "PATCH",
+    body: JSON.stringify({ content: $input("baseCv").value })
   });
-  const text = await response.text();
-  const body = text ? (JSON.parse(text) as { data?: AuthSession; errors?: Array<{ message: string }> }) : null;
-  if (!response.ok) {
-    const message = body?.errors?.[0]?.message || response.statusText;
-    throw new Error(`${response.status}: ${message}`);
-  }
-
-  const remember = document.getElementById("rememberLogin") as HTMLInputElement | null;
-  saveAuthSession(body!.data!, remember?.checked || false);
-  $input("directusPassword").value = "";
-  status.className = "status ok";
-  status.textContent = "Logged in";
-  showToast("Directus login OK.");
-  await testConnection();
-}
-
-async function refreshDirectusToken(): Promise<void> {
-  const { directusUrl } = readSettingsFromForm();
-  const auth = getStoredAuthSession();
-  if (!auth?.refresh_token) throw new Error("No refresh token available. Login again.");
-
-  const response = await fetch(`${directusUrl}/auth/refresh`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      refresh_token: auth.refresh_token,
-      mode: "json"
-    })
-  });
-  const text = await response.text();
-  const body = text ? (JSON.parse(text) as { data?: AuthSession; errors?: Array<{ message: string }> }) : null;
-  if (!response.ok) {
-    clearAuthSession();
-    const message = body?.errors?.[0]?.message || response.statusText;
-    throw new Error(`${response.status}: ${message}. Login again.`);
-  }
-
-  saveAuthSession(body!.data!, auth.persistent);
-}
-
-function saveAuthSession(data: AuthSession, persistent: boolean): void {
-  const payload = JSON.stringify({
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires: data.expires,
-    persistent
-  });
-  sessionStorage.setItem(authSessionKey, payload); // codeql[js/clear-text-storage-of-sensitive-data] -- intentional: self-hosted tool, user-owned session
-  if (persistent) {
-    localStorage.setItem(authSessionKey, payload); // codeql[js/clear-text-storage-of-sensitive-data] -- intentional: self-hosted tool, user-owned session
-  } else {
-    localStorage.removeItem(authSessionKey);
-  }
-}
-
-function getStoredAuthSession(): AuthSession | null {
-  const raw = sessionStorage.getItem(authSessionKey) || localStorage.getItem(authSessionKey);
-  return raw ? (JSON.parse(raw) as AuthSession) : null;
-}
-
-function clearAuthSession(): void {
-  sessionStorage.removeItem(authSessionKey);
-  localStorage.removeItem(authSessionKey);
+  showToast("Base CV saved.");
 }
 
 function buildLinkedInUrl({ keyword, location, workplace, settings }: { keyword: string; location: string; workplace: string; settings: Settings }): string {
@@ -474,12 +331,12 @@ function renderGeneratedRows(): void {
 async function saveRuns(): Promise<void> {
   if (!generatedRows.length) generateSearchRows();
   for (const row of generatedRows) {
-    await directusRequest("/items/job_search_runs", {
+    await apiFetch("/api/job-search-runs", {
       method: "POST",
       body: JSON.stringify(row)
     });
   }
-  showToast(`Saved ${generatedRows.length} search runs to Directus.`);
+  showToast(`Saved ${generatedRows.length} search runs.`);
 }
 
 async function testConnection(): Promise<void> {
@@ -487,11 +344,9 @@ async function testConnection(): Promise<void> {
   status.className = "status";
   status.textContent = "Testing...";
   try {
-    await directusRequest("/items/job_leads?limit=1&fields=id");
-    await directusRequest("/items/job_search_runs?limit=1&fields=id");
+    await apiFetch("/api/job-leads?limit=1");
     status.classList.add("ok");
     status.textContent = "Connected";
-    showToast("Directus collection access OK.");
   } catch (error) {
     status.classList.add("error");
     status.textContent = "Failed";
@@ -502,13 +357,11 @@ async function testConnection(): Promise<void> {
 async function loadLeads(): Promise<void> {
   const params = new URLSearchParams({
     sort: ($("leadSort") as HTMLSelectElement).value || "-score",
-    limit: String(Number($input("leadLimit").value) || 100),
-    fields: "id,status,score,title,company,location,workplace,seniority,language,url,apply_url,is_read,salary,notes,is_expired"
+    limit: String(Number($input("leadLimit").value) || 100)
   });
   appendLeadFilters(params);
 
-  const response = await directusRequest(`/items/job_leads?${params.toString()}`) as { data?: JobLead[] };
-  leadRows = response.data || [];
+  leadRows = (await apiFetch(`/api/job-leads?${params.toString()}`)) as JobLead[];
   renderLeads();
 }
 
@@ -523,7 +376,7 @@ function appendLeadFilters(params: URLSearchParams): void {
   ];
   for (const [inputId, field] of textFilters) {
     const value = $input(inputId).value.trim();
-    if (value) params.set(`filter[${field}][_icontains]`, value);
+    if (value) params.set(field, value);
   }
 
   const exactFilters: Array<[string, string]> = [
@@ -534,24 +387,19 @@ function appendLeadFilters(params: URLSearchParams): void {
   ];
   for (const [inputId, field] of exactFilters) {
     const value = ($(`${inputId}`) as HTMLSelectElement).value;
-    if (value) params.set(`filter[${field}][_eq]`, value);
+    if (value) params.set(field, value);
   }
 
   const readFilter = ($("leadReadFilter") as HTMLSelectElement).value;
-  if (readFilter) params.set("filter[is_read][_eq]", readFilter === "read" ? "true" : "false");
+  if (readFilter) params.set("is_read", readFilter === "read" ? "true" : "false");
 
   const expiredFilter = ($("leadExpiredFilter") as HTMLSelectElement).value;
-  if (expiredFilter === "hide") {
-    params.set("filter[_or][0][is_expired][_neq]", "true");
-    params.set("filter[_or][1][is_expired][_null]", "true");
-  } else if (expiredFilter === "show") {
-    params.set("filter[is_expired][_eq]", "true");
-  }
+  if (expiredFilter === "hide" || expiredFilter === "show") params.set("expired", expiredFilter);
 
   const scoreMin = $input("leadScoreMinFilter").value;
   const scoreMax = $input("leadScoreMaxFilter").value;
-  if (scoreMin !== "") params.set("filter[score][_gte]", String(Number(scoreMin)));
-  if (scoreMax !== "") params.set("filter[score][_lte]", String(Number(scoreMax)));
+  if (scoreMin !== "") params.set("score_min", String(Number(scoreMin)));
+  if (scoreMax !== "") params.set("score_max", String(Number(scoreMax)));
 }
 
 function initTabs(): void {
@@ -713,12 +561,11 @@ function displayLeadNotes(notes: string | null): string {
   const marker = "Description preview:";
   const markerIndex = text.indexOf(marker);
   if (markerIndex !== -1) return text.slice(markerIndex + marker.length).trim();
-  // eslint-disable-next-line security/detect-unsafe-regex
   return text.replace(/^Imported from LinkedIn search run \d+:[^\n]*(\n+)?/i, "").trim();
 }
 
 async function updateLead(id: string, patch: Partial<JobLead>): Promise<void> {
-  await directusRequest(`/items/job_leads/${encodeURIComponent(id)}`, {
+  await apiFetch(`/api/job-leads/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(patch)
   });
@@ -753,20 +600,19 @@ function handleLeadListClick(event: Event): void {
 async function generateCv(id: string): Promise<void> {
   showToast("Generating CV... This may take a minute.");
   try {
-    const response = await fetch(`${importerUrl}/generate-cv`, {
+    const response = await fetch("/generate-cv", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ jobId: id })
     });
-    const body = await response.json() as { markdown?: string; fileId?: string; error?: string };
+    const body = await response.json() as { markdown?: string; filename?: string; error?: string };
     if (!response.ok) throw new Error(body.error || response.statusText);
 
     // Open Modal
     $input("cvMarkdown").value = body.markdown || "";
-    if (body.fileId) {
-      const { directusUrl } = readSettingsFromForm();
+    if (body.filename) {
       const link = $("downloadPdfLink") as HTMLAnchorElement;
-      link.href = `${directusUrl}/assets/${body.fileId}?download`; // codeql[js/xss-through-dom] -- user-configured Directus URL, not injected HTML
+      link.href = `/cvs/${encodeURIComponent(body.filename)}`;
       link.style.display = "inline-block";
     } else {
       ($("downloadPdfLink") as HTMLAnchorElement).style.display = "none";
@@ -813,7 +659,7 @@ async function saveLead(event: SubmitEvent): Promise<void> {
     notes: String(form.get("notes") || "").trim()
   };
 
-  await directusRequest("/items/job_leads", {
+  await apiFetch("/api/job-leads", {
     method: "POST",
     body: JSON.stringify(payload)
   });
@@ -828,7 +674,7 @@ async function detectExpired(): Promise<void> {
   button.disabled = true;
   showToast("Detecting expired listings...");
   try {
-    const response = await fetch(`${importerUrl}/expire-stale-jobs`, { method: "POST" });
+    const response = await fetch("/expire-stale-jobs", { method: "POST" });
     const body = await response.json() as { expired?: number; error?: string };
     if (!response.ok) throw new Error(body.error || response.statusText);
     showToast(`Marked ${body.expired} listing(s) as expired.`);
@@ -861,7 +707,7 @@ async function importLinkedinJobs(): Promise<void> {
   setImportStatus("Importing jobs...", "");
   button.disabled = true;
   try {
-    const response = await fetch(`${importerUrl}/import-linkedin-jobs`, {
+    const response = await fetch("/import-linkedin-jobs", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -980,17 +826,12 @@ function debounceLoadLeads(): void {
 $("saveSettings").addEventListener("click", saveSettingsToStorage);
 $("clearSettings").addEventListener("click", () => {
   localStorage.removeItem(storageKey);
-  clearAuthSession();
   applySettings(defaults);
   showToast("Settings cleared.");
 });
 $("resetDefaults").addEventListener("click", () => applySettings(defaults));
 $("testConnection").addEventListener("click", testConnection);
-$("loginDirectus").addEventListener("click", () => loginDirectus().catch((error: Error) => {
-  $("connectionStatus").className = "status error";
-  $("connectionStatus").textContent = "Login failed";
-  showToast(error.message);
-}));
+$("saveBaseCv").addEventListener("click", () => saveBaseCv().catch((error: Error) => showToast(error.message)));
 $("generateSearches").addEventListener("click", generateSearchRows);
 $("saveRuns").addEventListener("click", () => saveRuns().catch((error: Error) => showToast(error.message)));
 $("openAll").addEventListener("click", openAll);
@@ -1030,3 +871,4 @@ applySettings(loadSettings());
 generateSearchRows();
 initTabs();
 initViewToggle();
+loadBaseCv().catch(() => {});
