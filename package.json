@@ -29,7 +29,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.0",
-    "@typescript-eslint/eslint-plugin": "^8.63.0",
+    "@typescript-eslint/eslint-plugin": "^8.64.0",
     "@typescript-eslint/parser": "^8.60.0",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.7.0",
@@ -41,7 +41,7 @@
     "globals": "^17.6.0",
     "husky": "^9.1.7",
     "jiti": "^2.7.0",
-    "lint-staged": "^17.0.7",
+    "lint-staged": "^17.1.0",
     "prettier": "^3.9.5",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
@@ -60,10 +60,10 @@
     "js-yaml": ">=4.1.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.111.0",
-    "@google/genai": "^2.11.0",
+    "@anthropic-ai/sdk": "^0.112.3",
+    "@google/genai": "^2.12.0",
     "md-to-pdf": "^5.2.5",
-    "openai": "^6.46.0",
+    "openai": "^6.48.0",
     "puppeteer": "^25.3.0"
   }
 }
