@@ -1,4 +1,4 @@
-# Job Search Automation with Directus
+# Job Search Automation
 
 [![CI](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/nagyonmarci/jobs-hunter/actions/workflows/ci.yml)
@@ -6,14 +6,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
 
-This is a small TypeScript/Node.js tool for tracking DevOps/SRE/Platform job leads in Directus.
+This is a small TypeScript/Node.js tool for tracking DevOps/SRE/Platform job leads in Postgres.
 
 It does not scrape LinkedIn behind login. Instead it:
 
 - generates targeted LinkedIn search URLs from your filters,
-- stores search runs in Directus,
-- imports public job cards from LinkedIn, No Fluff Jobs, Just Join IT, We Work Remotely, and EuroTopTech into Directus,
-- ingests selected job leads from JSON into Directus,
+- stores search runs in Postgres,
+- imports public job cards from LinkedIn, No Fluff Jobs, Just Join IT, We Work Remotely, and EuroTopTech into Postgres,
+- ingests selected job leads from JSON into Postgres,
 - keeps status, score, public salary, notes, language, workplace, and seniority in one backend.
 
 ## Docker Compose
@@ -26,10 +26,9 @@ cp .env.example .env
 
 Edit `.env` and set strong values for:
 
-- `DIRECTUS_PASSWORD`
-- `DIRECTUS_KEY`
-- `DIRECTUS_SECRET`
 - `POSTGRES_PASSWORD`
+- `ADMIN_USER`
+- `ADMIN_PASSWORD`
 
 Start the stack:
 
@@ -39,124 +38,32 @@ docker compose up -d
 
 Services:
 
-- Directus: `http://localhost:8055`
-- Admin UI behind OAuth: `http://localhost:4173/admin.html`
-- job importer API: `http://localhost:4180`
+- Admin UI + job importer API, behind Basic Auth: `http://localhost:4180`
 - Postgres: internal Docker network only
 
-Directus admin login comes from:
-
-```text
-DIRECTUS_EMAIL
-DIRECTUS_PASSWORD
-```
-
-## OAuth gate
-
-The admin UI is served behind `oauth2-proxy`. In Docker Compose, the public `4173` port belongs to the OAuth proxy, while the nginx admin service is only reachable inside the Docker network.
-
-Create an OAuth application at your provider and register this callback URL for local use:
-
-```text
-http://localhost:4173/oauth2/callback
-```
-
-Configure `.env`:
-
-```bash
-OAUTH2_PROXY_PROVIDER=github
-OAUTH2_PROXY_CLIENT_ID=your-client-id
-OAUTH2_PROXY_CLIENT_SECRET=your-client-secret
-OAUTH2_PROXY_COOKIE_SECRET=generated-cookie-secret
-OAUTH2_PROXY_REDIRECT_URL=http://localhost:4173/oauth2/callback
-OAUTH2_PROXY_EMAIL_DOMAINS=*
-```
-
-Generate the cookie secret:
-
-```bash
-openssl rand -base64 32
-```
-
-For Google or another OpenID Connect provider, use:
-
-```bash
-OAUTH2_PROXY_PROVIDER=oidc
-OAUTH2_PROXY_OIDC_ISSUER_URL=https://accounts.google.com
-```
-
-For production, set `OAUTH2_PROXY_REDIRECT_URL` to your public HTTPS callback URL and `OAUTH2_PROXY_COOKIE_SECURE=true`.
-
-Directus (`8055`) and the importer API (`4180`) are still exposed for local development. If you publish this outside your machine, put those services behind the same reverse proxy or remove their host port mappings.
-
-## Directus collections
-
-After the stack is up, run:
-
-```bash
-npm run provision:directus
-```
-
-This logs into Directus with `DIRECTUS_EMAIL` / `DIRECTUS_PASSWORD` unless `DIRECTUS_TOKEN` is set.
-
-It creates:
-
-- `job_leads`
-- `job_search_runs`
-
-`job_leads` stores normalized fields for each role, including source, source id, title, optional company, location, workplace, seniority, language, URL, apply URL, status, score, public salary/compensation, read state, notes, creation timestamp, and expiry state.
-
-If your local shell cannot reach `localhost:8055`, run provisioning inside the Docker network:
-
-```bash
-docker compose run --rm directus-tools
-```
+Required tables (`job_leads`, `job_search_runs`, `base_cv`, `app_settings`) are created automatically on first boot.
 
 ## Admin UI
 
 Open:
 
 ```text
-http://localhost:4173/admin.html
+http://localhost:4180/admin.html
 ```
+
+Your browser will prompt for the `ADMIN_USER` / `ADMIN_PASSWORD` credentials from `.env`.
 
 The admin UI lets you:
 
-- set Directus URL and token in browser local storage,
 - edit keywords, hybrid locations, remote locations, seniority, and posted-within window,
 - generate LinkedIn search URLs,
-- save generated search runs into Directus,
+- save generated search runs,
 - import concrete jobs from selected public sources,
 - manually add reviewed job leads,
 - review job leads with search, per-field filters, salary filtering, sorting, and read/unread marking,
 - filter out expired listings (hidden by default), manually mark individual leads as expired,
 - trigger expiry detection across all leads via **Detect expired** (URL 404 check for non-LinkedIn sources, time-based fallback via `EXPIRE_AFTER_DAYS`, default 30),
 - generate an ATS-optimised, role-tailored CV for a selected lead via **Generate CV** (see [CV generation](#cv-generation)).
-
-For browser writes, create a Directus static token:
-
-1. Open `http://localhost:8055`.
-2. Log in with `DIRECTUS_EMAIL` / `DIRECTUS_PASSWORD`.
-3. Open your user profile.
-4. Generate/copy a static token.
-5. Paste it into the admin UI connection settings.
-
-### Permissions checklist
-
-The admin UI needs collection access to:
-
-- `job_leads`: read, create, update
-- `job_search_runs`: read, create
-
-If you use the first admin user's static token, this should already work.
-
-If you create a separate non-admin Directus user/token, give its role or policy:
-
-- read/create/update permission on `job_leads`
-- read/create permission on `job_search_runs`
-- field access for all fields in both collections
-
-The `Test` button checks actual collection read access. It does not use `/server/ping`, because that can give misleading results for restricted tokens.
 
 ## Screenshots
 
@@ -185,14 +92,14 @@ The admin UI includes a **Generate CV** button on each job lead. It:
 
 1. screenshots the job posting URL with Puppeteer if no description is stored yet,
 2. extracts visible text via OpenAI Vision (GPT-4o),
-3. reads your master CV from the `base_cv` Directus collection,
+3. reads your master CV from the `base_cv` table,
 4. calls the configured LLM to produce an ATS-optimised, role-tailored CV in Markdown,
-5. converts it to PDF and uploads it to Directus Files.
+5. converts it to PDF and saves it to local disk.
 
 **Requirements:**
 
-- Add your master CV text to the `base_cv` collection (`content` field).
-- Create an `app_settings` collection with these fields:
+- Add your master CV text in the admin UI's **Base CV** section (Setup tab).
+- Set these fields in the admin UI's Setup tab (stored in the `app_settings` table):
 
   | Field               | Description                                |
   | ------------------- | ------------------------------------------ |
@@ -201,25 +108,7 @@ The admin UI includes a **Generate CV** button on each job lead. It:
   | `anthropic_api_key` | required when `preferred_llm = anthropic`  |
   | `gemini_api_key`    | required when `preferred_llm = gemini`     |
 
-The generated CV (Markdown + PDF) is stored on the job lead record and accessible from the Directus Files panel.
-
-## Local static admin fallback
-
-Without Docker, you can serve only the static admin UI:
-
-```bash
-npm run admin
-```
-
-Open:
-
-```text
-http://localhost:4173/admin.html
-```
-
-If Directus is not configured for browser requests, enable CORS in your Directus deployment for the admin UI origin.
-
-The importer API reads `cors_origin` from the `app_settings` Directus collection at startup to set its allowed origin header. If the field is absent or empty, it falls back to `http://localhost:4173`.
+The generated CV (Markdown + PDF) is stored on the job lead record; the PDF is downloadable at `/cvs/:filename`.
 
 ## Generate LinkedIn searches
 
@@ -245,9 +134,9 @@ Run:
 npm run search:linkedin
 ```
 
-The generated URLs are saved into Directus `job_search_runs`.
+The generated URLs are saved into the `job_search_runs` table.
 
-To test the search strategy without Directus:
+To test the search strategy without saving results:
 
 ```bash
 npm run search:linkedin:dry
@@ -297,7 +186,7 @@ npm run import:linkedin:dry -- --run-limit=1 --max-jobs-per-run=5
 Inside Docker:
 
 ```bash
-docker compose run --rm --entrypoint node directus-tools scripts/linkedin-importer.js --run-limit=25 --max-jobs-per-run=25
+docker compose run --rm --entrypoint node importer scripts/linkedin-importer.js --run-limit=25 --max-jobs-per-run=25
 ```
 
 ## Stop the stack
@@ -330,7 +219,7 @@ Statuses to use:
 
 ## Why this shape
 
-LinkedIn automation that logs in, scrapes pages, or submits applications is brittle and can risk the account. This setup keeps the reliable part automated: search generation, structured tracking, dedupe, and application pipeline state in Directus.
+LinkedIn automation that logs in, scrapes pages, or submits applications is brittle and can risk the account. This setup keeps the reliable part automated: search generation, structured tracking, dedupe, and application pipeline state in Postgres.
 
 ## Development
 
@@ -343,7 +232,6 @@ npm install
 Common tasks:
 
 ```bash
-npm run lint           # ESLint
 npm run typecheck      # TypeScript
 npm run format         # Prettier (write)
 npm run format:check   # Prettier (verify)
@@ -352,41 +240,35 @@ npm run test:run       # Vitest (single run)
 npm run test:coverage  # Vitest + v8 coverage
 ```
 
-`lint-staged` runs ESLint and Prettier on staged files via the
+`lint-staged` runs Prettier on staged files via the
 `pre-commit` hook; the `pre-push` hook runs the test suite.
 
-### Docker images
+### Docker image
 
-The multi-stage [`Dockerfile`](Dockerfile) builds two named targets:
+The [`Dockerfile`](Dockerfile) builds a single `app` target: the Node runtime
+serving the admin UI, importer API, and search scripts, published as
+`ghcr.io/nagyonmarci/jobs-hunter-app`.
 
-- `app` — the Node runtime (importer/search scripts), published as
-  `ghcr.io/nagyonmarci/jobs-hunter-app`
-- `admin` — the static admin UI served by nginx, published as
-  `ghcr.io/nagyonmarci/jobs-hunter-admin`
-
-Build either target locally:
+Build it locally:
 
 ```bash
-docker build --target app -t jobs-hunter-app:dev .
+docker build -t jobs-hunter-app:dev .
 docker run --rm jobs-hunter-app:dev scripts/generate-linkedin-searches.js --dry-run
-
-docker build --target admin -t jobs-hunter-admin:dev .
-docker run --rm -p 8080:80 jobs-hunter-admin:dev   # http://localhost:8080/admin.html
 ```
 
 ## Continuous integration
 
 Every push and pull request runs:
 
-- ESLint, Prettier check, and the LinkedIn search dry-run on Node 20 and 22
+- Prettier check and the LinkedIn search dry-run on Node 20 and 22
 - Vitest with v8 coverage (artifact uploaded for Node 20)
 - gitleaks secret scanning
 - CodeQL and Semgrep static analysis
 - Hadolint (Dockerfile) and Checkov (IaC) scanning
-- A build of both image targets plus a Trivy vulnerability scan
+- A build of the image plus a Trivy vulnerability scan
 - dependency review on pull requests
 
-Lint/format/tests, secret scanning, CodeQL, and the image build plus smoke
+Format/tests, secret scanning, CodeQL, and the image build plus smoke
 test block the build; Semgrep, Hadolint, Checkov, Trivy, and dependency
 review are informational and publish to the **Security → Code scanning** tab.
 A sticky `security-summary` comment reports per-check status on each pull
@@ -402,9 +284,9 @@ require manual review.
 Pushes to `main` publish `latest` and `sha-<short>` images; pushing a
 `vMAJOR.MINOR.PATCH` tag additionally publishes semver-tagged images and
 creates a GitHub release with auto-generated notes. The
-[`release` workflow](.github/workflows/release.yml) builds both targets
-(`app` and `admin`) for `linux/amd64` and `linux/arm64`, attaches SLSA
-provenance and an SBOM, and signs each image with cosign (keyless OIDC).
+[`release` workflow](.github/workflows/release.yml) builds the `app` image
+for `linux/amd64` and `linux/arm64`, attaches SLSA
+provenance and an SBOM, and signs the image with cosign (keyless OIDC).
 
 Verify a published image's signature:
 

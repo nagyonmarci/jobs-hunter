@@ -56,7 +56,6 @@ repository owner in the GitHub UI):
 - `Dockerfile lint (hadolint)`
 - `IaC scan (checkov)`
 - `Image build & scan (app)`
-- `Image build & scan (admin)`
 - `Dependency review`
 
 Recommended review requirements for branch protection on `main`:
@@ -81,7 +80,7 @@ In scope:
 
 Out of scope:
 
-- Self-hosted Directus deployments and their custom configuration.
+- Self-hosted Postgres deployments and their custom configuration.
 - Third-party services (LinkedIn, etc.) that this project integrates with.
 - Findings that require the attacker to already have administrative
-  access to the host or Directus instance.
+  access to the host or database.

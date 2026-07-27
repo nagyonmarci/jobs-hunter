@@ -9,7 +9,7 @@ export default defineConfig({
       reporter: ["text", "lcov", "html"],
       reportsDirectory: "coverage",
       include: ["scripts/**/*.ts"],
-      exclude: ["scripts/provision-directus.ts", "scripts/directus-client.ts"]
+      exclude: ["scripts/db.ts"]
     }
   }
 });

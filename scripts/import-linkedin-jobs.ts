@@ -1,9 +1,8 @@
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { createDirectusClient, findExistingByUrl } from "./directus-client.js";
+import { createJobLead, findJobLeadByUrl, listJobSearchRuns, updateJobLead } from "./db.js";
 import type {
   Config,
-  DirectusClient,
   ImportOptions,
   ImportSummary,
   Job,
@@ -14,13 +13,6 @@ import type {
 } from "./types.js";
 
 const defaultConfigPath = "config/searches.json";
-
-interface ExistingJob {
-  id: string;
-  url: string;
-  salary: string | null;
-  is_expired?: boolean;
-}
 
 interface ScoreInput {
   title: string;
@@ -66,7 +58,6 @@ interface EuroTopTechCard {
 }
 
 export async function importLinkedInJobs({
-  directus = null,
   configPath = defaultConfigPath,
   filters = {},
   sources = ["linkedin"],
@@ -80,8 +71,7 @@ export async function importLinkedInJobs({
     ...config.filters,
     ...filters
   };
-  const client = directus || (await createDirectusClient());
-  const runs = await loadSourceRuns(client, config, sources, runLimit);
+  const runs = await loadSourceRuns(config, sources, runLimit);
   const summary: ImportSummary = {
     runs: runs.length,
     fetched: 0,
@@ -137,26 +127,14 @@ export async function importLinkedInJobs({
           continue;
         }
 
-        const existing = dryRun
-          ? null
-          : await findExistingByUrl<ExistingJob>(
-              client,
-              enrichedJob.url,
-              "id,url,is_expired,salary"
-            );
+        const existing = dryRun ? null : await findJobLeadByUrl(enrichedJob.url);
         if (existing) {
           if (enrichedJob.no_longer_accepting && !existing.is_expired) {
-            await client.request(`/items/job_leads/${encodeURIComponent(existing.id)}`, {
-              method: "PATCH",
-              body: JSON.stringify({ is_expired: true })
-            });
+            await updateJobLead(existing.id, { is_expired: true });
             summary.markedExpired += 1;
           }
           if (!existing.salary && enrichedJob.salary) {
-            await client.request(`/items/job_leads/${encodeURIComponent(existing.id)}`, {
-              method: "PATCH",
-              body: JSON.stringify({ salary: enrichedJob.salary })
-            });
+            await updateJobLead(existing.id, { salary: enrichedJob.salary });
             summary.salaryUpdated += 1;
           }
           summary.skippedExisting += 1;
@@ -169,12 +147,8 @@ export async function importLinkedInJobs({
         }
 
         if (!dryRun) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { no_longer_accepting: _, ...jobPayload } = enrichedJob;
-          await client.request("/items/job_leads", {
-            method: "POST",
-            body: JSON.stringify(jobPayload)
-          });
+          await createJobLead(jobPayload);
         }
         summary.created += 1;
       }
@@ -192,23 +166,19 @@ export async function importLinkedInJobs({
   return summary;
 }
 
-export async function loadSearchRuns(
-  directus: DirectusClient,
-  limit: number
-): Promise<JobSearchRun[]> {
-  const params = new URLSearchParams({
-    sort: "-id",
-    limit: String(limit),
-    fields: "id,source,query,location,workplace,url,generated_at"
-  });
-  const response = (await directus.request(`/items/job_search_runs?${params.toString()}`)) as {
-    data?: JobSearchRun[];
-  };
-  return (response.data || []).filter((run) => run.source === "linkedin" && run.url);
+export async function loadSearchRuns(limit: number): Promise<JobSearchRun[]> {
+  const rows = await listJobSearchRuns({ source: "linkedin", limit });
+  return rows.map((row) => ({
+    id: String(row.id),
+    source: row.source,
+    query: row.query,
+    location: row.location,
+    workplace: row.workplace,
+    url: row.url
+  }));
 }
 
 async function loadSourceRuns(
-  directus: DirectusClient,
   config: Config,
   sources: string[],
   runLimit: number
@@ -216,7 +186,7 @@ async function loadSourceRuns(
   const requested = new Set(sources?.length ? sources : ["linkedin"]);
   const runs: JobSearchRun[] = [];
   if (requested.has("linkedin")) {
-    runs.push(...(await loadSearchRuns(directus, runLimit)));
+    runs.push(...(await loadSearchRuns(runLimit)));
   }
   if (requested.has("justjoinit")) {
     runs.push(
@@ -934,7 +904,7 @@ function detectLanguage(value: string): JobLanguage {
 
 function countMatches(text: string, words: string[]): number {
   return words.reduce(
-    // eslint-disable-next-line security/detect-non-literal-regexp -- word is escaped via escapeRegExp
+    // word is escaped via escapeRegExp, safe from ReDoS
     (count, word) => count + (new RegExp(`\\b${escapeRegExp(word)}\\b`, "i").test(text) ? 1 : 0),
     0
   );

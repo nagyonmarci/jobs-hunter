@@ -58,7 +58,6 @@ export interface Config {
 }
 
 export interface ImportOptions {
-  directus?: DirectusClient | null;
   configPath?: string;
   filters?: Partial<Config["filters"]>;
   sources?: string[];
@@ -82,8 +81,4 @@ export interface ImportSummary {
   failedRuns: number;
   dryRun: boolean;
   failures: Array<{ run: string; url: string; message: string }>;
-}
-
-export interface DirectusClient {
-  request(path: string, options?: RequestInit): Promise<unknown>;
 }

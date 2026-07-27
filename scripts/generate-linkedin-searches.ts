@@ -1,11 +1,10 @@
 import fs from "node:fs/promises";
-import { createDirectusClient } from "./directus-client.js";
+import { createJobSearchRun } from "./db.js";
 import { buildLinkedInSearchUrl } from "./linkedin-url.js";
 import type { Config, JobSearchRun } from "./types.js";
 
 const config = JSON.parse(await fs.readFile("config/searches.json", "utf8")) as Config;
 const dryRun = process.argv.includes("--dry-run");
-const directus = dryRun ? null : await createDirectusClient();
 
 const rows: JobSearchRun[] = [];
 
@@ -38,18 +37,14 @@ for (const keyword of config.filters.keywords) {
 }
 
 if (!dryRun) {
-  if (!directus) throw new Error("Directus client unavailable.");
   for (const row of rows) {
-    await directus.request("/items/job_search_runs", {
-      method: "POST",
-      body: JSON.stringify(row)
-    });
+    await createJobSearchRun(row);
   }
 }
 
 console.log(
   dryRun
-    ? `Generated ${rows.length} LinkedIn search URLs. Dry run: not stored in Directus.`
+    ? `Generated ${rows.length} LinkedIn search URLs. Dry run: not stored.`
     : `Generated and stored ${rows.length} LinkedIn search URLs.`
 );
 for (const row of rows)
