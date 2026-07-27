@@ -29,20 +29,20 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.0",
-    "@typescript-eslint/eslint-plugin": "^8.64.0",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.60.0",
     "@vitest/coverage-v8": "^4.1.10",
-    "eslint": "^10.7.0",
+    "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-n": "^18.2.2",
     "eslint-plugin-promise": "^7.2.1",
     "eslint-plugin-security": "^4.0.1",
     "fast-check": "^4.9.0",
-    "globals": "^17.6.0",
+    "globals": "^17.8.0",
     "husky": "^9.1.7",
     "jiti": "^2.7.0",
-    "lint-staged": "^17.1.0",
-    "prettier": "^3.9.5",
+    "lint-staged": "^17.2.0",
+    "prettier": "^3.9.6",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
@@ -60,10 +60,10 @@
     "js-yaml": ">=4.1.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.112.3",
-    "@google/genai": "^2.12.0",
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@google/genai": "^2.13.0",
     "md-to-pdf": "^5.2.5",
-    "openai": "^6.48.0",
+    "openai": "^6.49.0",
     "puppeteer": "^25.3.0"
   }
 }
