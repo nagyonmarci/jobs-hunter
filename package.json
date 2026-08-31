@@ -48,10 +48,10 @@
     "brace-expansion": ">=5.0.8"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.120.0",
-    "@google/genai": "^2.18.0",
+    "@anthropic-ai/sdk": "^0.121.0",
+    "@google/genai": "^2.19.0",
     "md-to-pdf": "^5.2.5",
-    "openai": "^7.5.0",
+    "openai": "^7.7.0",
     "pg": "^8.23.0",
     "puppeteer": "^25.8.0"
   }
