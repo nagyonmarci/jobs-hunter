@@ -23,6 +23,8 @@ interface Settings extends Defaults {
 
 interface JobLead {
   id: string | number;
+  source: string;
+  date_created?: string;
   status: string;
   score: number | null;
   title: string;
@@ -46,6 +48,15 @@ interface SearchRow {
   workplace: string;
   url: string;
   generated_at: string;
+}
+
+interface ImportLog {
+  id: number;
+  created_at: string;
+  level: string;
+  event: string;
+  message: string;
+  details: Record<string, unknown> | null;
 }
 
 const defaults: Defaults = {
@@ -131,7 +142,9 @@ const viewKey = "jobhunter_lead_view";
 
 let generatedRows: SearchRow[] = [];
 let leadRows: JobLead[] = [];
+let importLogs: ImportLog[] = [];
 let currentView = localStorage.getItem(viewKey) || "list";
+let advancedFiltersVisible = false;
 
 function showToast(message: string): void {
   const toast = $("toast");
@@ -355,14 +368,23 @@ async function testConnection(): Promise<void> {
 }
 
 async function loadLeads(): Promise<void> {
+  const refreshButton = $("loadLeads") as HTMLButtonElement;
+  refreshButton.disabled = true;
+  refreshButton.textContent = "Refreshing…";
   const params = new URLSearchParams({
-    sort: ($("leadSort") as HTMLSelectElement).value || "-score",
-    limit: String(Number($input("leadLimit").value) || 100)
+    sort: ($("leadSort") as HTMLSelectElement).value || "-id",
+    limit: String(Number(($("leadLimit") as HTMLSelectElement).value) || -1)
   });
   appendLeadFilters(params);
 
-  leadRows = (await apiFetch(`/api/job-leads?${params.toString()}`)) as JobLead[];
-  renderLeads();
+  try {
+    leadRows = (await apiFetch(`/api/job-leads?${params.toString()}`)) as JobLead[];
+    $("lastRefresh").textContent = `Updated ${new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date())}`;
+    renderLeads();
+  } finally {
+    refreshButton.disabled = false;
+    refreshButton.textContent = "Refresh";
+  }
 }
 
 function appendLeadFilters(params: URLSearchParams): void {
@@ -403,7 +425,8 @@ function appendLeadFilters(params: URLSearchParams): void {
 }
 
 function initTabs(): void {
-  const savedTab = localStorage.getItem(tabKey) || "setup";
+  const saved = localStorage.getItem(tabKey);
+  const savedTab = ["leads", "searches", "import", "logs", "settings"].includes(saved || "") ? saved as string : "leads";
   activateTab(savedTab);
   if (savedTab === "leads") loadLeads().catch(() => {});
   document.querySelectorAll<HTMLButtonElement>(".tab-btn").forEach((btn) => {
@@ -414,8 +437,103 @@ function initTabs(): void {
       if (tab === "leads" && leadRows.length === 0) {
         loadLeads().catch((error: Error) => showToast(error.message));
       }
+      if (tab === "logs") loadImportLogs().catch((error: Error) => showToast(error.message));
     });
   });
+}
+
+async function loadImportLogs(): Promise<void> {
+  $("logStatus").textContent = "Loading logs…";
+  importLogs = (await apiFetch("/api/import-logs?limit=200")) as ImportLog[];
+  renderImportLogs();
+}
+
+function renderImportLogs(): void {
+  const level = ($("logLevelFilter") as HTMLSelectElement).value;
+  const rows = level ? importLogs.filter((log) => log.level === level) : importLogs;
+  $("logStatus").textContent = `${rows.length} log entries shown.`;
+  $("logRows").innerHTML = rows.length
+    ? rows.map((log) => `
+      <article class="log-entry ${escapeAttribute(log.level)}">
+        <div class="log-meta">
+          <time datetime="${escapeAttribute(log.created_at)}">${escapeHtml(formatLogDate(log.created_at))}</time>
+          <span class="log-level">${escapeHtml(log.level)}</span>
+          <span>${escapeHtml(log.event.replaceAll("_", " "))}</span>
+        </div>
+        <p>${escapeHtml(log.message)}</p>
+        ${log.details ? `<details><summary>Technical details</summary><pre>${escapeHtml(JSON.stringify(log.details, null, 2))}</pre></details>` : ""}
+      </article>`).join("")
+    : `<div class="empty-state">No log entries match this filter.</div>`;
+}
+
+function formatLogDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "medium"
+  }).format(date);
+}
+
+function organizeWorkspace(): void {
+  const searches = $("searchesWorkspace");
+  const importer = $("importWorkspace");
+  const settingsLayout = document.querySelector("#tab-settings .layout") as HTMLElement;
+  [".config-panel", ".results-panel"].forEach((selector) => {
+    const panel = document.querySelector(selector);
+    if (panel) searches.append(panel);
+  });
+  [".import-panel", ".lead-panel"].forEach((selector) => {
+    const panel = document.querySelector(selector);
+    if (panel) importer.append(panel);
+  });
+  settingsLayout.classList.add("settings-layout");
+
+  const primaryFilterIds = new Set([
+    "leadSearch", "leadStatusFilter", "leadWorkplaceFilter", "leadScoreMinFilter", "leadSort"
+  ]);
+  document.querySelectorAll<HTMLElement>(".lead-toolbar > label").forEach((label) => {
+    const field = label.querySelector("input, select") as HTMLElement | null;
+    if (field && !primaryFilterIds.has(field.id)) label.classList.add("advanced-filter");
+  });
+}
+
+function toggleAdvancedFilters(): void {
+  advancedFiltersVisible = !advancedFiltersVisible;
+  $("toggleFilters").setAttribute("aria-expanded", String(advancedFiltersVisible));
+  $("toggleFilters").textContent = advancedFiltersVisible ? "Fewer filters" : "More filters";
+  document.querySelectorAll<HTMLElement>(".advanced-filter").forEach((field) => {
+    field.classList.toggle("visible", advancedFiltersVisible);
+  });
+}
+
+const leadFilterIds = [
+  "leadSearch", "leadTitleFilter", "leadCompanyFilter", "leadLocationFilter", "leadNotesFilter",
+  "leadSalaryFilter", "leadUrlFilter", "leadStatusFilter", "leadReadFilter", "leadExpiredFilter",
+  "leadWorkplaceFilter", "leadSeniorityFilter", "leadLanguageFilter", "leadScoreMinFilter",
+  "leadScoreMaxFilter"
+];
+
+function clearLeadFilters(): void {
+  leadFilterIds.forEach((id) => {
+    const control = $(id) as HTMLInputElement | HTMLSelectElement;
+    control.value = id === "leadExpiredFilter" ? "hide" : "";
+  });
+  loadLeads().catch((error: Error) => showToast(error.message));
+}
+
+function renderActiveFilters(): void {
+  const filters = leadFilterIds.flatMap((id) => {
+    const control = $(id) as HTMLInputElement | HTMLSelectElement;
+    if (!control.value || (id === "leadExpiredFilter" && control.value === "hide")) return [];
+    const label = control.closest("label")?.childNodes[0]?.textContent?.trim() || id;
+    const value = control instanceof HTMLSelectElement
+      ? control.selectedOptions[0]?.textContent || control.value
+      : control.value;
+    return [{ label, value }];
+  });
+  $("activeFilters").innerHTML = filters.length
+    ? `<span>Active filters</span>${filters.map(({ label, value }) => `<span class="filter-chip">${escapeHtml(label)}: ${escapeHtml(value)}</span>`).join("")}`
+    : "";
 }
 
 function activateTab(tabName: string): void {
@@ -450,7 +568,7 @@ function renderCompactCard(lead: JobLead): string {
   const scoreClass = scoreClassName(lead.score);
   const readClass = lead.is_read ? "read" : "unread";
   return `
-    <article class="lead-card compact ${readClass}${lead.is_expired ? " expired" : ""}" data-id="${escapeAttribute(String(lead.id))}">
+    <article class="lead-card compact ${readClass}${lead.is_expired ? " expired" : ""}" data-id="${escapeAttribute(String(lead.id))}" data-url="${escapeAttribute(lead.url || "")}" tabindex="0" role="link" aria-label="Open ${escapeAttribute(lead.title || "job listing")}">
       <div class="lead-title-row">
         <h3>${escapeHtml(lead.title || "Untitled role")}</h3>
         <span class="score-pill ${scoreClass}">${escapeHtml(String(lead.score ?? "-"))}</span>
@@ -459,6 +577,7 @@ function renderCompactCard(lead: JobLead): string {
         ${escapeHtml([lead.company, lead.location].filter(Boolean).join(" · ") || "—")}
       </p>
       <div class="tag-row">
+        <span class="source-pill">${escapeHtml(sourceLabel(lead.source))}</span>
         ${lead.workplace ? `<span>${escapeHtml(lead.workplace)}</span>` : ""}
         ${lead.seniority ? `<span>${escapeHtml(lead.seniority)}</span>` : ""}
         ${lead.language ? `<span>${escapeHtml(lead.language)}</span>` : ""}
@@ -470,9 +589,7 @@ function renderCompactCard(lead: JobLead): string {
         <select data-action="status" aria-label="Status for ${escapeAttribute(lead.title || "lead")}">
           ${statusOptions(lead.status)}
         </select>
-        <button type="button" class="secondary" data-action="generate-cv">Generate CV</button>
-        ${!lead.is_expired ? `<button type="button" class="secondary" data-action="mark-expired">Mark expired</button>` : ""}
-        ${lead.url ? `<a class="button-link" href="${escapeAttribute(lead.url)}" target="_blank" rel="noreferrer">Open</a>` : ""}
+        ${renderMoreActions(lead)}
       </div>
     </article>
   `;
@@ -498,6 +615,11 @@ function renderLeads(): void {
 
   const badge = document.getElementById("leadsTabCount");
   if (badge) badge.textContent = filtered.length ? String(filtered.length) : "";
+  $("metricVisible").textContent = String(filtered.length);
+  $("metricUnread").textContent = String(unreadCount);
+  $("metricShortlisted").textContent = String(filtered.filter((lead) => lead.status === "shortlisted").length);
+  $("metricApplied").textContent = String(filtered.filter((lead) => lead.status === "applied").length);
+  renderActiveFilters();
 
   $("leadRows").innerHTML = filtered.length
     ? filtered.map(currentView === "grid" ? renderCompactCard : renderLeadCard).join("")
@@ -509,7 +631,7 @@ function renderLeadCard(lead: JobLead): string {
   const readClass = lead.is_read ? "read" : "unread";
   const visibleNotes = displayLeadNotes(lead.notes);
   return `
-    <article class="lead-card ${readClass}${lead.is_expired ? " expired" : ""}" data-id="${escapeAttribute(String(lead.id))}">
+    <article class="lead-card ${readClass}${lead.is_expired ? " expired" : ""}" data-id="${escapeAttribute(String(lead.id))}" data-url="${escapeAttribute(lead.url || "")}" tabindex="0" role="link" aria-label="Open ${escapeAttribute(lead.title || "job listing")}">
       <div class="lead-main">
         <div class="lead-title-row">
           <h3>${escapeHtml(lead.title || "Untitled role")}</h3>
@@ -519,6 +641,7 @@ function renderLeadCard(lead: JobLead): string {
           ${escapeHtml([lead.company, lead.location].filter(Boolean).join(" · ") || "Company/location unknown")}
         </p>
         <div class="tag-row">
+          <span class="source-pill">${escapeHtml(sourceLabel(lead.source))}</span>
           ${lead.workplace ? `<span>${escapeHtml(lead.workplace)}</span>` : ""}
           ${lead.seniority ? `<span>${escapeHtml(lead.seniority)}</span>` : ""}
           ${lead.language ? `<span>${escapeHtml(lead.language)}</span>` : ""}
@@ -535,12 +658,30 @@ function renderLeadCard(lead: JobLead): string {
         <button type="button" class="secondary" data-action="toggle-read">
           ${lead.is_read ? "Mark unread" : "Mark read"}
         </button>
-        <button type="button" class="secondary" data-action="generate-cv">Generate CV</button>
-        ${!lead.is_expired ? `<button type="button" class="secondary" data-action="mark-expired">Mark expired</button>` : ""}
-        ${lead.url ? `<a class="button-link" href="${escapeAttribute(lead.url)}" target="_blank" rel="noreferrer">Open</a>` : ""}
+        ${renderMoreActions(lead)}
       </div>
     </article>
   `;
+}
+
+function sourceLabel(source: string): string {
+  return ({
+    linkedin: "LinkedIn",
+    justjoinit: "Just Join IT",
+    nofluffjobs: "No Fluff Jobs",
+    weworkremotely: "We Work Remotely",
+    eurotoptech: "EuroTopTech"
+  } as Record<string, string>)[source] || source || "Unknown source";
+}
+
+function renderMoreActions(lead: JobLead): string {
+  return `<details class="more-actions">
+    <summary>More</summary>
+    <div class="more-actions-menu">
+      <button type="button" class="menu-action" data-action="generate-cv">Generate CV</button>
+      ${!lead.is_expired ? `<button type="button" class="menu-action danger" data-action="mark-expired">Mark expired</button>` : ""}
+    </div>
+  </details>`;
 }
 
 function statusOptions(current: string): string {
@@ -583,8 +724,13 @@ function handleLeadListChange(event: Event): void {
 function handleLeadListClick(event: Event): void {
   const target = event.target as HTMLElement;
   const action = target.dataset["action"];
-  if (!action) return;
   const card = target.closest(".lead-card") as HTMLElement;
+  if (!card) return;
+  if (!action) {
+    if (target.closest("button, select, details, summary, a, input, textarea")) return;
+    openLeadCard(card);
+    return;
+  }
   const id = card.dataset["id"] as string;
   const lead = leadRows.find((row) => String(row.id) === String(id));
 
@@ -595,6 +741,19 @@ function handleLeadListClick(event: Event): void {
   } else if (action === "generate-cv") {
     generateCv(id);
   }
+}
+
+function handleLeadListKeydown(event: KeyboardEvent): void {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const target = event.target as HTMLElement;
+  if (!target.classList.contains("lead-card")) return;
+  event.preventDefault();
+  openLeadCard(target);
+}
+
+function openLeadCard(card: HTMLElement): void {
+  const url = card.dataset["url"];
+  if (url) window.open(url, "_blank", "noopener,noreferrer");
 }
 
 async function generateCv(id: string): Promise<void> {
@@ -696,6 +855,8 @@ interface ImportSummary {
   skippedFiltered: number;
   filterReasons?: Record<string, number>;
   failedRuns?: number;
+  rateLimitedSources?: string[];
+  failures?: Array<{ source: string; message: string }>;
   error?: string;
 }
 
@@ -738,7 +899,7 @@ async function importLinkedinJobs(): Promise<void> {
       body.failedRuns ? `Failed runs ${body.failedRuns}.` : ""
     ].filter(Boolean).join(" ");
 
-    setImportStatus(message, body.failedRuns ? "error" : "ok");
+    renderImportSummary(body);
     showToast(message);
     await loadLeads();
   } catch (error) {
@@ -747,6 +908,36 @@ async function importLinkedinJobs(): Promise<void> {
   } finally {
     button.disabled = false;
   }
+}
+
+function renderImportSummary(summary: ImportSummary): void {
+  const element = $("importStatus");
+  element.className = summary.failedRuns ? "form-status import-summary error" : "form-status import-summary ok";
+  element.innerHTML = `
+    <div><strong>${summary.created}</strong><span>Created</span></div>
+    <div><strong>${summary.parsed}</strong><span>Parsed</span></div>
+    <div><strong>${summary.skippedExisting}</strong><span>Existing</span></div>
+    <div><strong>${summary.skippedFiltered}</strong><span>Filtered</span></div>
+    ${summary.failedRuns ? `<div><strong>${summary.failedRuns}</strong><span>Failed runs</span></div>` : ""}
+    ${renderImportFailures(summary)}
+  `;
+}
+
+function renderImportFailures(summary: ImportSummary): string {
+  const failures = summary.failures || [];
+  if (!failures.length) return "";
+  const counts = new Map<string, { count: number; reasons: Set<string> }>();
+  failures.forEach((failure) => {
+    const source = sourceLabel(failure.source);
+    const entry = counts.get(source) || { count: 0, reasons: new Set<string>() };
+    entry.count += 1;
+    const status = failure.message.match(/returned (\d{3})/)?.[1];
+    entry.reasons.add(status === "429" ? "rate limited" : status ? `HTTP ${status}` : "request failed");
+    counts.set(source, entry);
+  });
+  return `<p class="import-errors">${[...counts.entries()]
+    .map(([source, value]) => `${escapeHtml(source)}: ${value.count} (${[...value.reasons].join(", ")})`)
+    .join(" · ")}${summary.rateLimitedSources?.length ? ". Remaining requests for rate-limited sources were stopped." : ""}</p>`;
 }
 
 function setImportStatus(message: string, state: string): void {
@@ -839,6 +1030,10 @@ $("copyUrls").addEventListener("click", () => copyUrls().catch((error: Error) =>
 $("importLinkedinJobs").addEventListener("click", importLinkedinJobs);
 $("loadLeads").addEventListener("click", () => loadLeads().catch((error: Error) => showToast(error.message)));
 $("detectExpired").addEventListener("click", () => detectExpired().catch((error: Error) => showToast(error.message)));
+$("toggleFilters").addEventListener("click", toggleAdvancedFilters);
+$("clearLeadFilters").addEventListener("click", clearLeadFilters);
+$("refreshLogs").addEventListener("click", () => loadImportLogs().catch((error: Error) => showToast(error.message)));
+$("logLevelFilter").addEventListener("change", renderImportLogs);
 $("leadSearch").addEventListener("input", renderLeads);
 [
   "leadTitleFilter",
@@ -862,11 +1057,13 @@ $("leadSearch").addEventListener("input", renderLeads);
 ].forEach((id) => $(id).addEventListener("change", () => loadLeads().catch((error: Error) => showToast(error.message))));
 $("leadRows").addEventListener("change", handleLeadListChange);
 $("leadRows").addEventListener("click", handleLeadListClick);
+$("leadRows").addEventListener("keydown", (event) => handleLeadListKeydown(event as KeyboardEvent));
 $("leadForm").addEventListener("submit", (event) => saveLead(event as SubmitEvent).catch((error: Error) => {
   setLeadFormStatus(error.message, "error");
   showToast(error.message);
 }));
 
+organizeWorkspace();
 applySettings(loadSettings());
 generateSearchRows();
 initTabs();

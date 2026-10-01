@@ -63,6 +63,8 @@ export interface ImportOptions {
   sources?: string[];
   runLimit?: number;
   maxJobsPerRun?: number;
+  runOffset?: number;
+  requestDelayMs?: number;
   dryRun?: boolean;
   logger?: (message: string) => void;
 }
@@ -79,6 +81,7 @@ export interface ImportSummary {
   skippedExpired: number;
   filterReasons: Record<string, number>;
   failedRuns: number;
+  rateLimitedSources: string[];
   dryRun: boolean;
-  failures: Array<{ run: string; url: string; message: string }>;
+  failures: Array<{ run: string; source: string; url: string; message: string }>;
 }

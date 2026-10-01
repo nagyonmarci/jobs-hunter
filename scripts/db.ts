@@ -42,6 +42,14 @@ function migrate(): Promise<void> {
         id SERIAL PRIMARY KEY, preferred_llm VARCHAR(50),
         openai_api_key VARCHAR(255), anthropic_api_key VARCHAR(255), gemini_api_key VARCHAR(255)
       );
+      CREATE TABLE IF NOT EXISTS import_logs (
+        id SERIAL PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        level VARCHAR(20) NOT NULL,
+        event VARCHAR(50) NOT NULL,
+        message TEXT NOT NULL,
+        details JSONB
+      );
 
       -- One-time fix: this column used to be a Directus file (uuid) reference;
       -- it now stores a plain local filename.
@@ -180,11 +188,13 @@ export async function listJobLeads(filters: JobLeadFilters = {}): Promise<JobLea
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  const order = (filters.sort && SORT_MAP[filters.sort]) || "score DESC NULLS LAST";
-  params.push(Math.min(Math.max(Number(filters.limit) || 100, 1), 500));
+  const order = (filters.sort && SORT_MAP[filters.sort]) || "id DESC";
+  const limit = Number(filters.limit);
+  const unlimited = limit === -1;
+  if (!unlimited) params.push(Math.min(Math.max(limit || 100, 1), 500));
 
   const { rows } = await pool.query<JobLeadRow>(
-    `SELECT * FROM job_leads ${where} ORDER BY ${order} LIMIT $${params.length}`,
+    `SELECT * FROM job_leads ${where} ORDER BY ${order}${unlimited ? "" : ` LIMIT $${params.length}`}`,
     params
   );
   return rows;
@@ -279,6 +289,41 @@ export async function bulkMarkExpired(ids: number[]): Promise<void> {
   await pool.query(`UPDATE job_leads SET is_expired = TRUE WHERE id = ANY($1::int[])`, [ids]);
 }
 
+export interface ImportLogRow {
+  id: number;
+  created_at: Date;
+  level: string;
+  event: string;
+  message: string;
+  details: Record<string, unknown> | null;
+}
+
+export async function createImportLog(log: {
+  level: string;
+  event: string;
+  message: string;
+  details?: unknown;
+}): Promise<void> {
+  await migrate();
+  await pool.query(
+    `INSERT INTO import_logs (level, event, message, details) VALUES ($1, $2, $3, $4)`,
+    [log.level, log.event, log.message, log.details ? JSON.stringify(log.details) : null]
+  );
+  await pool.query(
+    `DELETE FROM import_logs WHERE id NOT IN (SELECT id FROM import_logs ORDER BY id DESC LIMIT 1000)`
+  );
+}
+
+export async function listImportLogs(limit = 200): Promise<ImportLogRow[]> {
+  await migrate();
+  const safeLimit = Math.min(Math.max(Number(limit) || 200, 1), 1000);
+  const { rows } = await pool.query<ImportLogRow>(
+    `SELECT * FROM import_logs ORDER BY id DESC LIMIT $1`,
+    [safeLimit]
+  );
+  return rows;
+}
+
 export interface JobSearchRunRow {
   id: number;
   source: string;
@@ -309,10 +354,15 @@ export async function listJobSearchRuns(
     clauses.push(`source = $${params.length}`);
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  params.push(Math.min(Math.max(Number(options.limit) || 25, 1), 500));
+  const limit = Number(options.limit);
+  const unlimited = limit === -1;
+  if (!unlimited) params.push(Math.min(Math.max(limit || 25, 1), 500));
 
   const { rows } = await pool.query<JobSearchRunRow>(
-    `SELECT * FROM job_search_runs ${where} ORDER BY id DESC LIMIT $${params.length}`,
+    `SELECT * FROM (
+       SELECT DISTINCT ON (source, url) * FROM job_search_runs ${where}
+       ORDER BY source, url, id DESC
+     ) AS latest_runs ORDER BY id DESC${unlimited ? "" : ` LIMIT $${params.length}`}`,
     params
   );
   return rows;

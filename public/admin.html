@@ -3,24 +3,33 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Job Search Admin</title>
+    <title>Job Hunter</title>
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
     <header class="topbar">
-      <div>
-        <p class="eyebrow">Job search automation</p>
-        <h1>Job Search Admin</h1>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">JH</span>
+        <div>
+          <p class="eyebrow">Job search workspace</p>
+          <h1>Job Hunter</h1>
+        </div>
       </div>
-      <div class="status" id="connectionStatus">Loading...</div>
+      <div class="header-status">
+        <span class="last-refresh" id="lastRefresh">Not refreshed yet</span>
+        <div class="status" id="connectionStatus">Connecting…</div>
+      </div>
     </header>
 
     <nav class="tab-bar">
-      <button type="button" class="tab-btn active" data-tab="setup">Setup</button>
-      <button type="button" class="tab-btn" data-tab="leads">Job Leads <span class="leads-count" id="leadsTabCount"></span></button>
+      <button type="button" class="tab-btn active" data-tab="leads">Jobs <span class="leads-count" id="leadsTabCount"></span></button>
+      <button type="button" class="tab-btn" data-tab="searches">Searches</button>
+      <button type="button" class="tab-btn" data-tab="import">Import</button>
+      <button type="button" class="tab-btn" data-tab="logs">Logs</button>
+      <button type="button" class="tab-btn" data-tab="settings">Settings</button>
     </nav>
 
-    <div class="tab-content" id="tab-setup">
+    <div class="tab-content hidden" id="tab-settings">
       <main class="layout">
         <section class="panel settings-panel">
           <div class="panel-header">
@@ -206,14 +215,16 @@
             </fieldset>
             <label>
               Runs to process
-              <input id="importRunLimit" type="number" min="1" max="200" value="25">
+              <input id="importRunLimit" type="number" min="1" max="50" value="12">
+              <small>Saved LinkedIn searches to check in this import.</small>
             </label>
             <label>
               Jobs per run
               <input id="importJobsPerRun" type="number" min="1" max="100" value="25">
+              <small>Maximum job cards processed from each search.</small>
             </label>
           </div>
-          <p class="form-status" id="importStatus">No import attempted yet.</p>
+          <div class="form-status import-summary" id="importStatus" aria-live="polite">No import attempted yet.</div>
         </section>
 
         <section class="panel lead-panel">
@@ -256,17 +267,71 @@
       </main>
     </div>
 
-    <div class="tab-content hidden" id="tab-leads">
+    <div class="tab-content hidden" id="tab-searches">
+      <main class="workspace-layout" id="searchesWorkspace"></main>
+    </div>
+
+    <div class="tab-content hidden" id="tab-import">
+      <main class="workspace-layout" id="importWorkspace"></main>
+    </div>
+
+    <div class="tab-content hidden" id="tab-logs">
+      <main class="logs-page">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="section-kicker">Diagnostics</p>
+              <h2>Import logs</h2>
+              <p>Persistent history of imports, failures and expiry checks.</p>
+            </div>
+            <div class="button-row">
+              <label class="inline-filter">
+                Level
+                <select id="logLevelFilter">
+                  <option value="">All levels</option>
+                  <option value="error">Errors</option>
+                  <option value="info">Info</option>
+                </select>
+              </label>
+              <button type="button" id="refreshLogs">Refresh logs</button>
+            </div>
+          </div>
+          <p class="form-status" id="logStatus">Logs have not been loaded.</p>
+          <div class="log-list" id="logRows"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="tab-content" id="tab-leads">
       <div class="leads-page">
+        <section class="overview" aria-label="Job overview">
+          <article class="metric-card">
+            <span>Visible jobs</span>
+            <strong id="metricVisible">—</strong>
+          </article>
+          <article class="metric-card metric-new">
+            <span>Unread</span>
+            <strong id="metricUnread">—</strong>
+          </article>
+          <article class="metric-card metric-shortlist">
+            <span>Shortlisted</span>
+            <strong id="metricShortlisted">—</strong>
+          </article>
+          <article class="metric-card metric-applied">
+            <span>Applied</span>
+            <strong id="metricApplied">—</strong>
+          </article>
+        </section>
         <section class="panel leads-panel">
           <div class="panel-header">
             <div>
-              <h2>Job Leads</h2>
+              <p class="section-kicker">Your pipeline</p>
+              <h2>Job opportunities</h2>
               <p id="leadCount">Not loaded.</p>
             </div>
             <div class="button-row">
-              <button type="button" class="secondary" id="loadLeads">Refresh leads</button>
-              <button type="button" class="secondary" id="detectExpired">Detect expired</button>
+              <button type="button" class="secondary" id="detectExpired">Check expired</button>
+              <button type="button" id="loadLeads">Refresh</button>
             </div>
           </div>
 
@@ -368,9 +433,9 @@
             <label>
               Sort
               <select id="leadSort">
+                <option value="-id">Newest first</option>
                 <option value="-score">Score high first</option>
                 <option value="score">Score low first</option>
-                <option value="-id">Newest first</option>
                 <option value="id">Oldest first</option>
                 <option value="title">Title A-Z</option>
                 <option value="company">Company A-Z</option>
@@ -379,7 +444,12 @@
             </label>
             <label>
               Limit
-              <input id="leadLimit" type="number" min="10" max="500" value="100">
+              <select id="leadLimit">
+                <option value="-1">All jobs</option>
+                <option value="100">100 jobs</option>
+                <option value="250">250 jobs</option>
+                <option value="500">500 jobs</option>
+              </select>
             </label>
             <div class="view-toggle">
               <span class="view-toggle-label">View</span>
@@ -388,7 +458,13 @@
                 <button type="button" class="view-btn" data-view="grid" title="Grid view">⊞</button>
               </div>
             </div>
+            <div class="filter-actions">
+              <button type="button" class="secondary" id="toggleFilters" aria-expanded="false">More filters</button>
+              <button type="button" class="text-button" id="clearLeadFilters">Clear filters</button>
+            </div>
           </div>
+
+          <div class="active-filters" id="activeFilters" aria-live="polite"></div>
 
           <div class="lead-list" id="leadRows"></div>
         </section>
@@ -401,7 +477,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Generated CV</h2>
-          <button type="button" class="close-btn" id="closeCvModal">&times;</button>
+          <button type="button" class="close-btn" id="closeCvModal" aria-label="Close CV preview">&times;</button>
         </div>
         <div class="modal-body">
           <textarea id="cvMarkdown" rows="20" style="width:100%;" readonly></textarea>

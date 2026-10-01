@@ -71,7 +71,7 @@
       "baseUrl": "https://www.linkedin.com/jobs/search/"
     },
     "justjoinit": {
-      "searchUrls": ["https://justjoin.it/job-offers/poland-remote/devops"]
+      "searchUrls": ["https://justjoin.it/job-offers/remote/devops"]
     },
     "nofluffjobs": {
       "searchUrls": ["https://nofluffjobs.com/pl/devops/remote"]

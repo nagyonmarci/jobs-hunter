@@ -163,6 +163,18 @@ The importer:
 
 Supported source adapters:
 
+Automatic imports run one minute after server startup, then hourly, using all five
+sources below. Set `IMPORT_INTERVAL_HOURS` to change the interval; expiry checks
+remain daily (`EXPIRE_CHECK_INTERVAL_HOURS`). Scheduled runs do not overlap.
+By default, each scheduled run processes 12 distinct saved LinkedIn searches and
+rotates through the full set over time. Requests are spaced by 2.5 seconds and
+the remaining LinkedIn searches are stopped when LinkedIn returns HTTP 429.
+Configure these safeguards with `SCHEDULED_RUN_LIMIT` and
+`LINKEDIN_REQUEST_DELAY_MS`. `SCHEDULED_MAX_JOBS_PER_RUN=-1` processes all cards
+returned by a selected search. Source requests time out after 30 seconds and
+failures are included in the scheduled import log. Leads appear newest first by
+default; choose a score sort when needed.
+
 - LinkedIn: uses saved search runs.
 - No Fluff Jobs: uses configured search URLs from `source.nofluffjobs.searchUrls`; imports visible salary ranges when shown on the listing card.
 - Just Join IT: uses configured search URLs from `source.justjoinit.searchUrls`; imports structured `employmentTypes` salary ranges and ignores empty `0 - 0` ranges.

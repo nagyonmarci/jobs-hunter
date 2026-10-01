@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { importLinkedInJobs } from "./import-linkedin-jobs.js";
+import { isExpiredListingContent } from "./expiry.js";
 import {
   listJobLeads,
   createJobLead,
@@ -13,7 +14,9 @@ import {
   getAppSettings,
   updateAppSettings,
   getBaseCv,
-  updateBaseCv
+  updateBaseCv,
+  createImportLog,
+  listImportLogs
 } from "./db.js";
 import type {
   JobLeadFilters,
@@ -26,9 +29,11 @@ import type { ImportOptions } from "./types.js";
 
 const EXPIRE_AFTER_DAYS = Number(process.env.EXPIRE_AFTER_DAYS || 30);
 const EXPIRE_CHECK_MS = Number(process.env.EXPIRE_CHECK_INTERVAL_HOURS || 24) * 3_600_000;
+const IMPORT_INTERVAL_MS = Math.max(1, Number(process.env.IMPORT_INTERVAL_HOURS) || 1) * 3_600_000;
 const SCHEDULED_RUN_LIMIT = process.env.SCHEDULED_RUN_LIMIT
   ? Number(process.env.SCHEDULED_RUN_LIMIT)
-  : -1;
+  : 12;
+const LINKEDIN_REQUEST_DELAY_MS = Number(process.env.LINKEDIN_REQUEST_DELAY_MS) || 2_500;
 const SCHEDULED_MAX_JOBS_PER_RUN = process.env.SCHEDULED_MAX_JOBS_PER_RUN
   ? Number(process.env.SCHEDULED_MAX_JOBS_PER_RUN)
   : -1;
@@ -135,6 +140,11 @@ async function handleRequest(
     return;
   }
 
+  if (request.method === "GET" && pathname === "/api/import-logs") {
+    sendJson(response, 200, await listImportLogs(Number(url.searchParams.get("limit")) || 200));
+    return;
+  }
+
   if (request.method === "PATCH" && pathname === "/api/app-settings") {
     const body = (await readJsonBody(request)) as Partial<Omit<AppSettingsRow, "id">>;
     sendJson(response, 200, await updateAppSettings(body));
@@ -172,12 +182,21 @@ async function handleRequest(
         sources: body.sources || ["linkedin"],
         runLimit: Number(body.runLimit) > 0 ? Number(body.runLimit) : 25,
         maxJobsPerRun: Number(body.maxJobsPerRun) > 0 ? Number(body.maxJobsPerRun) : 25,
+        requestDelayMs: (body.sources || ["linkedin"]).includes("linkedin")
+          ? LINKEDIN_REQUEST_DELAY_MS
+          : 0,
         filters: body.filters || {},
         dryRun: Boolean(body.dryRun)
       });
+      await logImportSummary("manual_import", summary);
       sendJson(response, 200, summary);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
+      await createImportLog({
+        level: "error",
+        event: "manual_import",
+        message: error instanceof Error ? error.message : String(error)
+      });
       sendJson(response, 500, { error: "Import failed" });
     }
     return;
@@ -206,6 +225,12 @@ async function handleRequest(
   if (request.method === "POST" && pathname === "/expire-stale-jobs") {
     try {
       const result = await expireStaleJobs();
+      await createImportLog({
+        level: "info",
+        event: "expiry_check",
+        message: `Expiry check marked ${result.expired} listing(s) as expired.`,
+        details: result
+      });
       sendJson(response, 200, result);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
@@ -241,22 +266,46 @@ function parseJobLeadFilters(params: URLSearchParams): JobLeadFilters {
   return filters;
 }
 
+let scheduledRunActive = false;
+let lastExpiryCheck = 0;
+
 async function scheduledRun() {
-  const summary = await importLinkedInJobs({
-    runLimit: SCHEDULED_RUN_LIMIT,
-    maxJobsPerRun: SCHEDULED_MAX_JOBS_PER_RUN
-  });
-  console.log(
-    `Scheduled import: created ${summary.created}, markedExpired ${summary.markedExpired ?? 0}.`
-  );
-  const { expired } = await expireStaleJobs();
-  console.log(`Expire check: ${expired} expired.`);
+  if (scheduledRunActive) return;
+  scheduledRunActive = true;
+  try {
+    const summary = await importLinkedInJobs({
+      sources: ["linkedin", "justjoinit", "nofluffjobs", "weworkremotely", "eurotoptech"],
+      runLimit: SCHEDULED_RUN_LIMIT,
+      maxJobsPerRun: SCHEDULED_MAX_JOBS_PER_RUN,
+      runOffset:
+        SCHEDULED_RUN_LIMIT > 0
+          ? Math.floor(Date.now() / IMPORT_INTERVAL_MS) * SCHEDULED_RUN_LIMIT
+          : 0,
+      requestDelayMs: LINKEDIN_REQUEST_DELAY_MS,
+      logger: console.log
+    });
+    console.log(`Scheduled import: ${JSON.stringify(summary)}`);
+    await logImportSummary("scheduled_import", summary);
+    if (Date.now() - lastExpiryCheck >= EXPIRE_CHECK_MS) {
+      const { expired } = await expireStaleJobs();
+      console.log(`Expire check: ${expired} expired.`);
+      await createImportLog({
+        level: "info",
+        event: "expiry_check",
+        message: `Scheduled expiry check marked ${expired} listing(s) as expired.`,
+        details: { expired }
+      });
+      lastExpiryCheck = Date.now();
+    }
+  } finally {
+    scheduledRunActive = false;
+  }
 }
 
 server.listen(port, () => {
   console.log(`Job search admin listening on http://0.0.0.0:${port}`);
   setTimeout(() => scheduledRun().catch(console.error), 60_000);
-  setInterval(() => scheduledRun().catch(console.error), EXPIRE_CHECK_MS);
+  setInterval(() => scheduledRun().catch(console.error), IMPORT_INTERVAL_MS);
 });
 
 function sendJson(response: http.ServerResponse, status: number, payload: unknown): void {
@@ -293,8 +342,13 @@ async function expireStaleJobs(): Promise<{ expired: number }> {
   for (const job of jobs) {
     if (job.source !== "linkedin") {
       try {
-        const r = await fetch(job.url, { method: "HEAD", redirect: "follow" });
-        if (r.status === 404) {
+        const r = await fetch(job.url, {
+          method: "GET",
+          redirect: "follow",
+          signal: AbortSignal.timeout(15_000)
+        });
+        const body = r.ok ? await r.text() : "";
+        if (r.status === 404 || isExpiredListingContent(job.source, body)) {
           toExpire.push(job.id);
           continue;
         }
@@ -311,4 +365,17 @@ async function expireStaleJobs(): Promise<{ expired: number }> {
   await bulkMarkExpired(toExpire);
 
   return { expired: toExpire.length };
+}
+
+async function logImportSummary(
+  event: string,
+  summary: Awaited<ReturnType<typeof importLinkedInJobs>>
+): Promise<void> {
+  const level = summary.failedRuns > 0 ? "error" : "info";
+  await createImportLog({
+    level,
+    event,
+    message: `Created ${summary.created}; parsed ${summary.parsed}; failed runs ${summary.failedRuns}.`,
+    details: summary
+  });
 }
