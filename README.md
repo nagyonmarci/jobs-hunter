@@ -289,7 +289,9 @@ request.
 OSSF Scorecard runs weekly and on every push to `main`. Dependabot opens
 weekly updates for npm packages, GitHub Actions, and the Dockerfile base
 image; patch and minor updates are auto-merged once CI passes, major updates
-require manual review.
+require manual review. After `main` changes, an automation requests a Dependabot
+rebase for each outdated dependency PR so required checks run again against the
+current base branch before auto-merge.
 
 ## Releases
 
