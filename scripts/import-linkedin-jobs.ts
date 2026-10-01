@@ -63,6 +63,8 @@ export async function importLinkedInJobs({
   sources = ["linkedin"],
   runLimit = 25,
   maxJobsPerRun = 25,
+  runOffset = 0,
+  requestDelayMs = 0,
   dryRun = false,
   logger = () => {}
 }: ImportOptions = {}): Promise<ImportSummary> {
@@ -71,7 +73,7 @@ export async function importLinkedInJobs({
     ...config.filters,
     ...filters
   };
-  const runs = await loadSourceRuns(config, sources, runLimit);
+  const runs = await loadSourceRuns(config, sources, runLimit, runOffset);
   const summary: ImportSummary = {
     runs: runs.length,
     fetched: 0,
@@ -84,12 +86,21 @@ export async function importLinkedInJobs({
     skippedExpired: 0,
     filterReasons: {},
     failedRuns: 0,
+    rateLimitedSources: [],
     dryRun,
     failures: []
   };
 
+  const blockedSources = new Set<string>();
+  let previousSource = "";
   for (const run of runs) {
+    if (blockedSources.has(run.source)) continue;
     try {
+      if (run.source === "linkedin" && previousSource === "linkedin" && requestDelayMs > 0) {
+        const jitter = Math.floor(Math.random() * Math.max(1, requestDelayMs / 2));
+        await sleep(requestDelayMs + jitter);
+      }
+      previousSource = run.source;
       logger(`Fetching ${run.workplace} ${run.location}: ${run.query}`);
       const html = await fetchSourceHtml(run.url);
       summary.fetched += 1;
@@ -156,10 +167,16 @@ export async function importLinkedInJobs({
       summary.failedRuns += 1;
       summary.failures.push({
         run: run.id || run.url,
+        source: run.source,
         url: run.url,
         message: error instanceof Error ? error.message : String(error)
       });
       logger(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof SourceFetchError && error.status === 429) {
+        blockedSources.add(run.source);
+        summary.rateLimitedSources.push(run.source);
+        logger(`Rate limited by ${run.source}; skipping its remaining runs.`);
+      }
     }
   }
 
@@ -181,18 +198,20 @@ export async function loadSearchRuns(limit: number): Promise<JobSearchRun[]> {
 async function loadSourceRuns(
   config: Config,
   sources: string[],
-  runLimit: number
+  runLimit: number,
+  runOffset = 0
 ): Promise<JobSearchRun[]> {
   const requested = new Set(sources?.length ? sources : ["linkedin"]);
   const runs: JobSearchRun[] = [];
   if (requested.has("linkedin")) {
-    runs.push(...(await loadSearchRuns(runLimit)));
+    const linkedinRuns = await loadSearchRuns(runOffset > 0 ? -1 : runLimit);
+    runs.push(...rotateRuns(linkedinRuns, runLimit, runOffset));
   }
   if (requested.has("justjoinit")) {
     runs.push(
       ...(config.source?.justjoinit?.searchUrls?.length
         ? config.source.justjoinit.searchUrls
-        : ["https://justjoin.it/job-offers/poland-remote/devops"]
+        : ["https://justjoin.it/job-offers/remote/devops"]
       ).map((url, index) => ({
         id: `justjoinit-${index + 1}`,
         source: "justjoinit",
@@ -253,6 +272,7 @@ async function loadSourceRuns(
 
 export async function fetchSourceHtml(url: string): Promise<string> {
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(30_000),
     headers: {
       accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "accept-language": "en-US,en;q=0.9,hu;q=0.8",
@@ -261,9 +281,30 @@ export async function fetchSourceHtml(url: string): Promise<string> {
     }
   });
   if (!response.ok) {
-    throw new Error(`Source returned ${response.status} for ${url}`);
+    throw new SourceFetchError(response.status, url);
   }
   return response.text();
+}
+
+export class SourceFetchError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly url: string
+  ) {
+    super(`Source returned ${status} for ${url}`);
+    this.name = "SourceFetchError";
+  }
+}
+
+export function rotateRuns<T>(runs: T[], limit: number, offset: number): T[] {
+  if (limit < 0 || limit >= runs.length) return runs;
+  if (limit === 0 || runs.length === 0) return [];
+  const start = ((offset % runs.length) + runs.length) % runs.length;
+  return Array.from({ length: limit }, (_, index) => runs[(start + index) % runs.length] as T);
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function enrichJob(job: Job): Promise<Job> {
@@ -371,7 +412,7 @@ function extractJobsForRun(html: string, run: JobSearchRun, config: Config): Job
   return extractLinkedInJobs(html, run, config);
 }
 
-function extractJustJoinItJobs(html: string, run: JobSearchRun, config: Config): Job[] {
+export function extractJustJoinItJobs(html: string, run: JobSearchRun, config: Config): Job[] {
   const offers = extractJustJoinItOffers(html);
   const seen = new Set<string>();
   return offers
@@ -402,7 +443,7 @@ function extractJustJoinItJobs(html: string, run: JobSearchRun, config: Config):
     });
 }
 
-function extractJustJoinItOffers(html: string): JustJoinItOffer[] {
+export function extractJustJoinItOffers(html: string): JustJoinItOffer[] {
   const offers: JustJoinItOffer[] = [];
   let searchFrom = 0;
   const marker = '\\"data\\":[';
@@ -427,7 +468,9 @@ function extractJustJoinItOffers(html: string): JustJoinItOffer[] {
   return offers;
 }
 
-function formatJustJoinItSalary(employmentTypes: SalaryEmploymentType[] = []): string | null {
+export function formatJustJoinItSalary(
+  employmentTypes: SalaryEmploymentType[] = []
+): string | null {
   const paidTypes = employmentTypes.filter(
     (item) =>
       item &&
@@ -461,7 +504,7 @@ function formatJustJoinItSalary(employmentTypes: SalaryEmploymentType[] = []): s
   return formatted.slice(0, 3).join("; ") || null;
 }
 
-function extractNoFluffJobs(html: string, run: JobSearchRun, config: Config): Job[] {
+export function extractNoFluffJobs(html: string, run: JobSearchRun, config: Config): Job[] {
   const cards: Job[] = [];
   const cardPattern =
     /<a\b[^>]*class="[^"]*posting-list-item[^"]*"[^>]*href="([^"]+)"[\s\S]*?<\/a>/gi;
@@ -509,7 +552,7 @@ function extractNoFluffJobs(html: string, run: JobSearchRun, config: Config): Jo
   return cards;
 }
 
-function extractNoFluffJobsSalary(segment: string): string | null {
+export function extractNoFluffJobsSalary(segment: string): string | null {
   const text = cleanText(segment).replace(/\u00a0/g, " ");
   const match = /(\d[\d\s]{1,12})\s*[–-]\s*(\d[\d\s]{1,12})\s*(PLN|EUR|USD|GBP|CHF)\b/i.exec(text);
   if (!match) return null;
@@ -518,7 +561,7 @@ function extractNoFluffJobsSalary(segment: string): string | null {
   ).toUpperCase()}`;
 }
 
-function extractWeWorkRemotelyJobs(html: string, run: JobSearchRun, config: Config): Job[] {
+export function extractWeWorkRemotelyJobs(html: string, run: JobSearchRun, config: Config): Job[] {
   const jobs: Job[] = [];
   const seen = new Set<string>();
   const cardPattern = /<li\b[^>]*new-listing-container[\s\S]*?<\/li>/gi;
@@ -576,7 +619,7 @@ function extractWeWorkRemotelyJobs(html: string, run: JobSearchRun, config: Conf
   return jobs;
 }
 
-function extractEuroTopTechJobs(html: string, run: JobSearchRun, config: Config): Job[] {
+export function extractEuroTopTechJobs(html: string, run: JobSearchRun, config: Config): Job[] {
   const cards = extractEuroTopTechCards(html);
   const seen = new Set<string>();
   return cards
@@ -621,7 +664,7 @@ function extractEuroTopTechJobs(html: string, run: JobSearchRun, config: Config)
     });
 }
 
-function extractEuroTopTechCards(html: string): EuroTopTechCard[] {
+export function extractEuroTopTechCards(html: string): EuroTopTechCard[] {
   const titleMatches = [...html.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)].filter(
     (match) => !/Explore\s+devops\s+opportunities/i.test(cleanText(match[1] || ""))
   );
@@ -740,11 +783,11 @@ function decodeHtml(value: string): string {
     .replace(/&([a-z]+);/gi, (_, name: string) => named[name as keyof typeof named] || `&${name};`);
 }
 
-function stableId(value: string): string {
+export function stableId(value: string): string {
   return createHash("sha256").update(normalize(value)).digest("hex").slice(0, 8);
 }
 
-function formatSalaryRange(
+export function formatSalaryRange(
   from: number | string | null | undefined,
   to: number | string | null | undefined
 ): string {
@@ -764,14 +807,14 @@ function formatSalaryRange(
   return "";
 }
 
-function formatSalaryNumber(value: number | string): string {
+export function formatSalaryNumber(value: number | string): string {
   const normalized = String(value).replace(/\s+/g, "");
   const number = Number(normalized);
   if (!Number.isFinite(number)) return normalized.trim();
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(number);
 }
 
-function wantedJobFilterReason(job: Job, config: Config): string | null {
+export function wantedJobFilterReason(job: Job, config: Config): string | null {
   const title = normalize(job.title);
   const excludes = (config.filters.excludeKeywords || []).map(normalizeKeyword).filter(Boolean);
   if (excludes.some((term) => title.includes(term))) return "excluded_keyword";
@@ -789,21 +832,21 @@ function wantedJobFilterReason(job: Job, config: Config): string | null {
   return wanted.some((term) => title.includes(term)) ? null : "role_title_not_matched";
 }
 
-function enrichedJobFilterReason(job: Job, config: Config): string | null {
+export function enrichedJobFilterReason(job: Job, config: Config): string | null {
   if (!isAllowedLanguage(job, config)) return `language_${job.language || "unknown"}_blocked`;
   if (hasNegativeSignal(job, config)) return "negative_signal";
   if ((job.score ?? 0) < minimumScore(config)) return "score_below_minimum";
   return null;
 }
 
-function isAllowedLanguage(job: Job, config: Config): boolean {
+export function isAllowedLanguage(job: Job, config: Config): boolean {
   const allowed = config.filters.allowedLanguages || ["english", "hungarian", "mixed", "unknown"];
   const blocked = config.filters.blockedLanguages || ["other"];
   if (blocked.includes(job.language)) return false;
   return allowed.includes(job.language);
 }
 
-function hasNegativeSignal(job: Job, config: Config): boolean {
+export function hasNegativeSignal(job: Job, config: Config): boolean {
   const title = normalize(job.title);
   const fullText = normalize(`${job.title} ${job.location || ""} ${job.notes || ""}`);
   return (config.filters.negativeSignals || [])
@@ -817,12 +860,12 @@ function hasNegativeSignal(job: Job, config: Config): boolean {
     });
 }
 
-function minimumScore(config: Config): number {
+export function minimumScore(config: Config): number {
   const value = Number(config.filters.minimumScore);
   return Number.isFinite(value) ? value : 45;
 }
 
-function detectLanguage(value: string): JobLanguage {
+export function detectLanguage(value: string): JobLanguage {
   const text = normalize(value);
   if (!text) return "unknown";
 
@@ -914,7 +957,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function scoreJob({ title, location, description = "", run, config }: ScoreInput): number {
+export function scoreJob({ title, location, description = "", run, config }: ScoreInput): number {
   let score = 55;
   const titleAndLocation = normalize(`${title} ${location || ""}`);
   const fullJobText = normalize(`${title} ${location || ""} ${description || ""}`);
@@ -944,7 +987,7 @@ function matchedTerms(text: string, terms: string[]): string[] {
     .filter((term) => text.includes(term));
 }
 
-function inferSeniority(title: string, query?: string): JobSeniority {
+export function inferSeniority(title: string, query?: string): JobSeniority {
   const text = normalize(`${title} ${query || ""}`);
   if (/junior|entry|graduate|trainee/.test(text)) return "junior";
   if (/medior|middle|mid|associate/.test(text)) return "medior";
@@ -952,7 +995,7 @@ function inferSeniority(title: string, query?: string): JobSeniority {
   return "unknown";
 }
 
-function mapSeniority(value: string | undefined, title = ""): JobSeniority {
+export function mapSeniority(value: string | undefined, title = ""): JobSeniority {
   const normalized = normalize(value);
   if (normalized === "mid" || normalized === "mid-level" || normalized === "regular")
     return "medior";
@@ -961,7 +1004,7 @@ function mapSeniority(value: string | undefined, title = ""): JobSeniority {
   return inferSeniority(title, "");
 }
 
-function mapWorkplace(
+export function mapWorkplace(
   value: string | undefined,
   fallback: JobWorkplace | string = "unknown"
 ): JobWorkplace {
@@ -972,7 +1015,7 @@ function mapWorkplace(
   return (fallback || "unknown") as JobWorkplace;
 }
 
-function inferWorkplace(location?: string | null): JobWorkplace {
+export function inferWorkplace(location?: string | null): JobWorkplace {
   return /remote/i.test(location || "") ? "remote" : "unknown";
 }
 
