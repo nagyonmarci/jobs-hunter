@@ -1,0 +1,73 @@
+name: Update Dependabot branches
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: update-dependabot-branches
+  cancel-in-progress: false
+
+jobs:
+  request-rebase:
+    name: Rebase outdated Dependabot PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Request rebase for outdated branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mapfile -t pull_requests < <(
+            gh pr list \
+              --repo "$GH_REPO" \
+              --state open \
+              --base main \
+              --author app/dependabot \
+              --json number \
+              --jq '.[].number'
+          )
+
+          for pull_request in "${pull_requests[@]}"; do
+            state="unknown"
+            head_sha=""
+
+            for attempt in 1 2 3; do
+              read -r state head_sha < <(
+                gh api "repos/$GH_REPO/pulls/$pull_request" \
+                  --jq '[.mergeable_state, .head.sha] | @tsv'
+              )
+              [[ "$state" != "unknown" ]] && break
+              sleep 5
+            done
+
+            if [[ "$state" != "behind" && "$state" != "dirty" ]]; then
+              echo "PR #$pull_request is $state; no rebase requested."
+              continue
+            fi
+
+            marker="auto-rebase-head:$head_sha"
+            already_requested="$({
+              gh api "repos/$GH_REPO/issues/$pull_request/comments" --paginate \
+                --jq ".[] | select(.body | contains(\"$marker\")) | .id"
+            } | head -n 1)"
+
+            if [[ -n "$already_requested" ]]; then
+              echo "PR #$pull_request already has a rebase request for $head_sha."
+              continue
+            fi
+
+            gh pr comment "$pull_request" \
+              --repo "$GH_REPO" \
+              --body "@dependabot rebase
+
+          <!-- $marker -->"
+            echo "Requested rebase for PR #$pull_request ($state)."
+          done
